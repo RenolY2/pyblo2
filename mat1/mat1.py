@@ -96,12 +96,14 @@ class MaterialInitData(object):
         texGenNumIndex = read_int8_at(f, initdatastart + 0x3)
         tevStageNumIndex = read_int8_at(f, initdatastart + 0x4)
         ditherIndex = read_int8_at(f, initdatastart + 0x5) 
-        
+        unk = read_int8_at(f, initdatastart + 0x6) 
         # Textures?
         texcount = 0
         for offset in (0x38, 0x3A, 0x3C, 0x3E, 0x40, 0x42, 0x44, 0x46):
             if read_int16_at(f, initdatastart+offset) != -1:
                 texcount += 1 
+                
+        fontIndex = read_int16_at(f, initdatastart + 0x48) 
         
         tevkcolor_indices = []
         for offset in (0x4A, 0x4C, 0x4E, 0x50):
@@ -112,11 +114,22 @@ class MaterialInitData(object):
         
         tevOrderIndices = []
         for i in range(16):
-            pass
-            
+            tevOrderIndex = read_int16_at(f, initdatastart + 0x72 + i*2) # (Up to 0x92)
+            tevOrderIndices.append(tevOrderIndex) 
         
+        tevcolor_indices = []
+        for i in range(4):
+            tevcolor_indices.append(read_int16_at(f, initdatastart + 0x92+i*2)) # up to excluding 0x9A
         
-                
+        tevstageIndices = []
+        for i in range(16):
+            tevstageindex = read_int16_at(f, initdatastart + 0x9a + i*2) #up to 0xba
+        
+        # 4 tevswapmodes starting at 0xDA (2 byte index) 
+        # 2 Mat Colors starting at 0x8 (2 byte index)
+        # 4 ColorChans starting at 0xC (2 byte index) 
+        # 8 texcoords starting at 0x14 (2 byte index)
+        # 8 tex matrices starting at 0x24 (2 byte index) 
         return initdata 
         
         
