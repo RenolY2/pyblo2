@@ -75,7 +75,21 @@ class StringTable(object):
             write_uint16(f, offset-start)
 
         f.seek(end)
-        
+
+
+def read_index_array(f, offset, size, count):
+    values = []
+    if size == 1:
+        read_at = read_int8_at 
+    elif size == 2:
+        read_at = read_int16_at 
+    
+    for i in range(count):
+        value = read_at(f, offset + i*size)
+        values.append(value)
+    
+    return values 
+    
 
 class MaterialInitData(object):
     def __init__(self):
@@ -97,39 +111,58 @@ class MaterialInitData(object):
         tevStageNumIndex = read_int8_at(f, initdatastart + 0x4)
         ditherIndex = read_int8_at(f, initdatastart + 0x5) 
         unk = read_int8_at(f, initdatastart + 0x6) 
+        
+        # 2 Mat Colors starting at 0x8 (2 byte index)
+        matColorIndices = read_index_array(f, initdatastart + 0x8, 2, 2)
+        
+        # 4 ColorChans starting at 0xC (2 byte index) 
+        colorChanIndices = read_index_array(f, initdatastart + 0xC, 2, 4)
+        
+        # 8 texcoords starting at 0x14 (2 byte index)
+        texCoordIncides = read_index_array(f, initdatastart + 0x14, 2, 8)
+        
+        # 8 tex matrices starting at 0x24 (2 byte index) 
+        texMatrixIndices = read_index_array(f, initdatastart + 0x24, 2, 8)
+        
+        
         # Textures?
         texcount = 0
-        for offset in (0x38, 0x3A, 0x3C, 0x3E, 0x40, 0x42, 0x44, 0x46):
-            if read_int16_at(f, initdatastart+offset) != -1:
+        
+        textureIndices = read_index_array(f, initdatastart + 0x38, 2, 8)
+        
+        for i in range(8):
+            if read_int16_at(f, initdatastart + 0x38 + i*2) != -1: # Up to 0x48
                 texcount += 1 
                 
         fontIndex = read_int16_at(f, initdatastart + 0x48) 
         
-        tevkcolor_indices = []
-        for offset in (0x4A, 0x4C, 0x4E, 0x50):
-            tevkcolor_indices.append(read_int16_at(f, initdatastart + offset))
+        tevkcolor_indices = read_index_array(f, initdatastart + 0x4A, 2, 4)
+        #for offset in (0x4A, 0x4C, 0x4E, 0x50):
+        #    tevkcolor_indices.append(read_int16_at(f, initdatastart + offset))
         
-        alphacompIndex = read_int16_at(f, initdatastart + 0xE2)
-        blendIndex = read_int16_at(f, initdatastart + 0xE4) # 4 bytes 
+        TevKColorSels_indices = read_index_array(f, initdatastart + 0x52, 1, 16)
         
-        tevOrderIndices = []
-        for i in range(16):
-            tevOrderIndex = read_int16_at(f, initdatastart + 0x72 + i*2) # (Up to 0x92)
-            tevOrderIndices.append(tevOrderIndex) 
+        TevKAlphaSels_indices = read_index_array(f, initdatastart + 0x62, 1, 16)
         
-        tevcolor_indices = []
-        for i in range(4):
-            tevcolor_indices.append(read_int16_at(f, initdatastart + 0x92+i*2)) # up to excluding 0x9A
+        tevOrderIndices = read_index_array(f, initdatastart + 0x72, 2, 16)
+        #for i in range(16):
+        #    tevOrderIndex = read_int16_at(f, initdatastart + 0x72 + i*2) # (Up to 0x92)
+        #    tevOrderIndices.append(tevOrderIndex) 
         
-        tevstageIndices = []
-        for i in range(16):
-            tevstageindex = read_int16_at(f, initdatastart + 0x9a + i*2) #up to 0xba
+        tevcolor_indices = read_index_array(f, initdatastart + 0x92, 2, 4)
+        #for i in range(4):
+        #    tevcolor_indices.append(read_int16_at(f, initdatastart + 0x92+i*2)) # up to excluding 0x9A
+        
+        tevstageIndices = read_index_array(f, initdatastart + 0x9A, 2, 16)
+        #for i in range(16):
+        #    tevstageindex = read_int16_at(f, initdatastart + 0x9a + i*2) #up to 0xba
         
         # 4 tevswapmodes starting at 0xDA (2 byte index) 
-        # 2 Mat Colors starting at 0x8 (2 byte index)
-        # 4 ColorChans starting at 0xC (2 byte index) 
-        # 8 texcoords starting at 0x14 (2 byte index)
-        # 8 tex matrices starting at 0x24 (2 byte index) 
+        tevswapmodeIndices = read_index_array(f, initdatastart + 0xDA, 2, 4)
+            alphacompIndex = read_int16_at(f, initdatastart + 0xE2)
+        blendIndex = read_int16_at(f, initdatastart + 0xE4) # 4 bytes 
+        
+        
         return initdata 
         
         
