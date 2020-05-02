@@ -112,6 +112,8 @@ class MaterialInitData(object):
         ditherIndex = read_int8_at(f, initdatastart + 0x5) 
         unk = read_int8_at(f, initdatastart + 0x6) 
         
+        # 0x7 padding 
+        
         # 2 Mat Colors starting at 0x8 (2 byte index)
         matColorIndices = read_index_array(f, initdatastart + 0x8, 2, 2)
         
@@ -123,7 +125,7 @@ class MaterialInitData(object):
         
         # 8 tex matrices starting at 0x24 (2 byte index) 
         texMatrixIndices = read_index_array(f, initdatastart + 0x24, 2, 8)
-        
+        # 0x34-0x37 padding
         
         # Textures?
         texcount = 0
@@ -156,12 +158,14 @@ class MaterialInitData(object):
         tevstageIndices = read_index_array(f, initdatastart + 0x9A, 2, 16)
         #for i in range(16):
         #    tevstageindex = read_int16_at(f, initdatastart + 0x9a + i*2) #up to 0xba
+        tevstageSwapModes = read_index_array(f, initdatastart + 0xBA, 2, 16)
         
         # 4 tevswapmodes starting at 0xDA (2 byte index) 
-        tevswapmodeIndices = read_index_array(f, initdatastart + 0xDA, 2, 4)
-            alphacompIndex = read_int16_at(f, initdatastart + 0xE2)
-        blendIndex = read_int16_at(f, initdatastart + 0xE4) # 4 bytes 
+        tevswapmodeTableIndices = read_index_array(f, initdatastart + 0xDA, 2, 4)
+        alphacompIndex = read_int16_at(f, initdatastart + 0xE2)
+        blendIndex = read_int16_at(f, initdatastart + 0xE4) 
         
+        # 2 byte padding
         
         return initdata 
         
