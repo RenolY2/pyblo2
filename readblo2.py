@@ -2,6 +2,7 @@ from binary_io import *
 from binascii import hexlify, unhexlify
 from mat1.mat1 import MAT1
 
+
 class Node(object): 
     def __init__(self):
         self.children = []
@@ -51,7 +52,7 @@ class Node(object):
                 node.children.append(Pane.from_file(f))
             elif next == b"PIC2":
                 print("hmmm", node.textures)
-                node.children.append(Picture.from_file(f, node.materials, node.textures))
+                node.children.append(Picture.from_file(f))
             elif next == b"WIN2":
                 node.children.append(Window.from_file(f))
             elif next == b"TBX2":
@@ -93,15 +94,15 @@ class Node(object):
         
 class Item(object):
     def __init__(self, name):
-        self.name = name 
+        self.name = name
         self.data = b""
-        print(name)
-    
+
     @classmethod 
     def from_file(cls, f):
-        
         resname = str(f.read(4), "ascii")
-        item = Item(resname)
+        item = cls(resname)
+        item.name = resname
+        print(resname, "hey")
         size = read_uint32(f)
         item.data = f.read(size-8)
         return item 
@@ -109,6 +110,7 @@ class Item(object):
     def write(self, f):
         f.write(bytes(self.name, "ascii"))
         write_uint32(f, len(self.data) + 8)
+        f.write(self.data)
     
     def serialize(self):
         result = {"type": self.name,
@@ -123,71 +125,102 @@ class Item(object):
         return item 
 
 
-class Pane(object):
-    def __init__(self):
-        self.name = "PAN2"
-        #self.unk1 = 0
+class Pane(Item):
+    def __init__(self, name=""):
+        super().__init__("PAN2")
         
     @classmethod
-    def from_file(cls, f, blotype=b"PAN2"):
+    def from_file(cls, f):
         start = f.tell()
-        if f.read(4) != blotype:
-            raise RuntimeError("Not a {0} section".format(blotype))
+        pane = super().from_file(f)
+
+        if pane.name not in ("PAN2", "pan2"):
+            raise RuntimeError("Not a PAN2 or pan2 section but {}".format(pane.name))
+        f.seek(start+4)
         size = read_uint32(f)
         unk = read_uint16(f)
         assert unk == 0x40
         
-        pane = cls()
-        pane.unk1 = read_uint16(f) # 0xA
-        pane.unk2 = read_uint8(f) # 0xC
-        pane.unk3 = read_uint8(f) # 0xD
+
+        pane.p_unk1 = read_uint16(f) # 0xA
+        pane.p_unk2 = read_uint8(f) # 0xC
+        pane.p_unk3 = read_uint8(f) # 0xD
         
         re = f.read(2)
         assert re == b"RE"
-        pane.panename = f.read(0x8+0x8).decode("ascii")
+        pane.p_panename = f.read(0x8+0x8).decode("ascii")
         #unknown = f.read(0x8)
         #assert unknown == b"\x00"*8
-        pane.size_x = read_float(f)
-        pane.size_y = read_float(f)
-        pane.scale_x = read_float(f)
-        pane.scale_y = read_float(f)
+        pane.p_size_x = read_float(f)
+        pane.p_size_y = read_float(f)
+        pane.p_scale_x = read_float(f)
+        pane.p_scale_y = read_float(f)
         unk = read_float(f)
         assert unk == 0.0 
         unk = read_float(f)
         assert unk == 0.0 
         
-        pane.rotation = read_float(f)
-        pane.offset_x = read_float(f)
-        pane.offset_y = read_float(f)
-        pane.unk4 = read_float(f)
+        pane.p_rotation = read_float(f)
+        pane.p_offset_x = read_float(f)
+        pane.p_offset_y = read_float(f)
+        pane.p_unk4 = read_float(f)
         
         assert f.tell() == start + 0x48
         return pane 
         
     def serialize(self):
-        result = {"type": "PAN2"}
+        result = super().serialize()
+        result["type"] = "PAN2"
+        del result["data"]
         for key, val in self.__dict__.items():
-            if key != "name":
+            if key != "name" and key != "data":
+                if isinstance(val, bytes):
+                    raise RuntimeError("hhhe")
                 result[key] = val 
                 
         return result 
-    
-    
-class Window(object):
-    def __init__(self):
-        self.name = "WIN2"
-    
+
+
+class PaneWrapper(Pane):
+    def __init__(self, name=""):
+        super().__init__()
+
     @classmethod
     def from_file(cls, f):
         start = f.tell()
-        if f.read(4) != b"WIN2":
-            raise RuntimeError("Not a WIN2 section")
+        name = str(f.read(4), "ascii")
+        print(name)
         size = read_uint32(f)
-        
-        window = cls()
-        
-        window.pane = Pane.from_file(f, b"pan2")
-        window_size = read_uint16(f)
+        pane = super().from_file(f)
+        print(pane, type(pane))
+        pane.name = name
+        f.seek(start+8)
+        pane.data = f.read(size-8)
+
+        return pane
+
+    def skip_pane(self, f):
+        name = f.read(4)
+        print(name)
+        assert name in (b"PAN2", b"pan2")
+        f.seek(f.tell()+0x48-4)
+
+
+class Window(PaneWrapper):
+    def __init__(self, name=""):
+        super().__init__()
+        self.name = "WIN2"
+
+    @classmethod
+    def from_file(cls, f):
+        start = f.tell()
+        window = super(Window, cls).from_file(f)
+        if window.name != "WIN2":
+            raise RuntimeError("Not a WIN2 section")
+        f.seek(start+0x8)
+        window.skip_pane(f)
+
+        window.win_size = read_uint16(f)
         reserved = f.read(6)
         assert reserved == b"RESERV"
         window.padding = f.read(8).decode("ascii", errors="backslashreplace")
@@ -195,14 +228,14 @@ class Window(object):
         window.subdata = [{}, {}, {}, {}]
         for i in range(4):
             window.subdata[i]["sub_unk1"] = read_uint16(f)
-        window.unkbyte1 = read_uint8(f)
-        window.unkbyte2 = read_uint8(f)
-        window.unk3 = read_uint16(f)
-        window.unk4 = read_uint16(f)
-        window.unk5 = read_uint16(f)
-        window.unk6 = read_uint16(f)
-        window.unk7 = read_uint16(f)
-        window.unk8 = read_uint16(f)
+        window.Wunkbyte1 = read_uint8(f)
+        window.Wunkbyte2 = read_uint8(f)
+        window.Wunk3 = read_uint16(f)
+        window.Wunk4 = read_uint16(f)
+        window.Wunk5 = read_uint16(f)
+        window.Wunk6 = read_uint16(f)
+        window.Wunk7 = read_uint16(f)
+        window.Wunk8 = read_uint16(f)
         
         re = f.read(2)
         assert re == b"RE"
@@ -215,42 +248,37 @@ class Window(object):
         return window 
         
     def serialize(self):
-        result = {"type": "WIN2"}
-        for key, val in self.__dict__.items():
-            if key != "name":
-                result[key] = val 
-        
-        result["pane"] = self.pane.serialize()
+        result = super().serialize()
+        result["type"] = "WIN2"
         
         return result 
     
     
-class Picture(Pane):
-    def __init__(self):
+class Picture(PaneWrapper):
+    def __init__(self, name=""):
+        super().__init__()
         self.name = "PIC2"
-        pass 
+        self.pane = Pane()
     
     @classmethod
-    def from_file(cls, f, materials, textures):
+    def from_file(cls, f):
         start = f.tell()
-        if f.read(4) != b"PIC2":
-            raise RuntimeError("Not a PIC2 section")
-        size = read_uint32(f)
-        
-        picture = cls()
-        
-        picture.pane = Pane.from_file(f, b"pan2")
+        picture = super(Picture, cls).from_file(f)
+        if picture.name != "PIC2":
+            raise RuntimeError("Not a PIC2 section: {}".format(picture.name))
+        f.seek(start)
+        print(f.read(8))
+        f.seek(start+8)
+        print(hex(f.tell()))
+        picture.skip_pane(f)
+        print(hex(f.tell()))
+
         picture_size = read_uint16(f)
         picture.material = read_uint16(f)
-        picture._texture = read_uint16(f)
-        
-        if picture._texture >= len(textures.references):
-            picture.texture = "Index out of range"
-        else:
-            picture.texture = textures.references[picture._texture]
+        picture.texture = read_uint16(f)
+
         
         re = f.read(2)
-        print(re)
         assert re == b"RE"
         color1 = {}
         color2 = {}
@@ -276,28 +304,31 @@ class Picture(Pane):
     def serialize(self):
         result = {"type": "PIC2"}
         for key, val in self.__dict__.items():
-            if key != "name":
-                result[key] = val 
-        
+            if key != "name" and key != "data":
+                if isinstance(val, bytes):
+                    raise RuntimeError("hhhe")
+                result[key] = val
         result["pane"] = self.pane.serialize()
         
         return result 
 
 
-class Textbox(object):
+class Textbox(PaneWrapper):
     def __init__(self):
+        super().__init__()
         self.name = "TBX2"
+        self.pane = Pane()
     
     @classmethod
     def from_file(cls, f):
         start = f.tell()
-        if f.read(4) != b"TBX2":
+        textbox = super(Textbox, cls).from_file(f)
+        if textbox.name != "TBX2":
             raise RuntimeError("Not a TBX2 section")
+        f.seek(start+4)
         size = read_uint32(f)
-        
-        textbox = cls()
-        
-        textbox.pane = Pane.from_file(f, b"pan2")
+        textbox.skip_pane(f)
+
         textbox_size = read_uint16(f)
         textbox.unk1 = read_uint16(f)
         textbox.unk2 = read_uint16(f)
@@ -322,12 +353,14 @@ class Textbox(object):
     def serialize(self):
         result = {"type": "TBX2"}
         for key, val in self.__dict__.items():
-            if key != "name":
-                result[key] = val 
-        
+            if key != "name" and key != "data":
+                if isinstance(val, bytes):
+                    raise RuntimeError("hhhe")
+                result[key] = val
         result["pane"] = self.pane.serialize()
         
         return result 
+
 
 class ResourceReference(Item):
     def __init__(self):
@@ -403,7 +436,7 @@ class Information(object):
             raise RuntimeError("Not an INF1 section!")
         
         size = read_uint32(f)
-        
+        assert size == 0x20
         width = read_uint16(f)
         height = read_uint16(f)
         inf = cls(width, height)
@@ -484,8 +517,8 @@ class ScreenBlo(object):
 if __name__ == "__main__":  
     import json 
     import sys
-    inputfile = sys.argv[1]
-    #inputfile = "courseselect_under.blo"
+    #inputfile = sys.argv[1]
+    inputfile = "courseselect_under.blo"
     outputfile = inputfile + ".json"
     with open(inputfile, "rb") as f:
     #with open("anim_text.blo", "rb") as f:
