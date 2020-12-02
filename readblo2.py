@@ -96,9 +96,20 @@ class Node(object):
                 bloitem = Node.deserialize(item)
             elif item["type"] == "TEX1":
                 bloitem = TextureNames.deserialize(item)
+            elif item["type"] == "FNT1":
+                bloitem = FontNames.deserialize(item)
+            elif item["type"] == "PAN2":
+                bloitem = Pane.deserialize(item)
+            elif item["type"] == "WIN2":
+                bloitem = Window.deserialize(item)
+            elif item["type"] == "TBX2":
+                bloitem = Textbox.deserialize(item)
+            elif item["type"] == "PIC2":
+                bloitem = Picture.deserialize(item)
+            elif item["type"] == "MAT1":
+                bloitem = Item.deserialize(item)
             else:
-                bloitem = item.deserialize(item)
-            
+                raise RuntimeError("Unknown item {0}".format(item["type"]))
             node.children.append(bloitem)
         
         return node 
@@ -133,7 +144,7 @@ class Item(object):
     @classmethod 
     def deserialize(cls, obj):
         item = cls(obj["type"])
-        item.data = bytes(unhexlify(obj["data"]), encoding="ascii")
+        item.data = unhexlify(obj["data"])
         return item 
 
 
@@ -211,7 +222,7 @@ class Pane(object):
     def serialize(self):
         result = {}
         result["type"] = "PAN2"
-        result["p_type"] = "PAN2"
+        result["p_type"] = self.p_name
 
         for key, val in self.__dict__.items():
             if key != "name" and key != "p_name":
@@ -228,7 +239,7 @@ class Pane(object):
     def deserialize(cls, obj):
         assert "p_type" in obj and obj["p_type"] in ("PAN2", "pan2")
         pane = cls()
-        pane.assign_value(obj, "p_name")
+        pane.p_name = obj["p_type"]
         pane.assign_value(obj, "p_unk1")
         pane.assign_value(obj, "p_unk2")
         pane.assign_value(obj, "p_unk3")
@@ -479,7 +490,7 @@ class Textbox(Pane):
     def write(self, f):
         start = f.tell()
         write_name(f, self.name)
-        write_uint32(0x70)
+        write_uint32(f, 0x70)
         super().write(f)
 
         write_uint16(f, self.size)
@@ -499,12 +510,13 @@ class Textbox(Pane):
 
         text = bytes(self.text, encoding="shift-jis")
         write_uint16(f, len(text))
+        assert f.tell() == start + 0x70
         f.write(text)
-        f.write(b"\x00")
+        #f.write(b"\x00")
         write_pad(f, 4)
         curr = f.tell()
         f.seek(start+4)
-        write_uint32(curr-start)
+        write_uint32(f, curr-start)
         f.seek(curr)
     
     def serialize(self):
@@ -746,14 +758,24 @@ class ScreenBlo(object):
         result.append(self.info.serialize())
         result.append(self.root.serialize())
         
-        return result 
+        return result
+
+    @classmethod
+    def deserialize(cls, obj):
+        blo = cls()
+        assert obj[0]["type"] == "INF1"
+        blo.info = Information.deserialize(obj[0])
+        blo.root = Node.deserialize(obj[1])
+
+        return blo
 
 
 if __name__ == "__main__":  
     import json 
     import sys
     #inputfile = sys.argv[1]
-    inputfile = "courseselect_under.blo"
+    #inputfile = "courseselect_under.blo"
+    inputfile = "anim_text.blo"
     outputfile = inputfile + ".json"
     with open(inputfile, "rb") as f:
     #with open("anim_text.blo", "rb") as f:
@@ -761,16 +783,26 @@ if __name__ == "__main__":
     #with open("cave_pikmin.blo", "rb") as f:
         blo = ScreenBlo.from_file(f)
     blo.print_hierarchy()
-    with open("texnames.txt", "w") as f:
-        for name in blo.root.children[0].references:
-            f.write(name)
-            f.write("\n")
+    #with open("texnames.txt", "w") as f:
+    #    for name in blo.root.children[0].references:
+    #        f.write(name)
+    #        f.write("\n")
             
     result = blo.serialize()
     with open(outputfile, "w") as f:
         json.dump(result, f, indent=4)
 
     with open(inputfile+"_2.blo", "wb") as f:
+        blo.write(f)
+
+    with open(outputfile, "r") as f:
+        data = json.load(f)
+        blo = ScreenBlo.deserialize(data)
+
+    with open(outputfile+"_2.json", "w") as f:
+        json.dump(blo.serialize(), f, indent=4)
+
+    with open(inputfile+"_3.blo", "wb") as f:
         blo.write(f)
 
     """with open(inputfile, "rb") as f:
