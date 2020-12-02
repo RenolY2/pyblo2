@@ -1,5 +1,16 @@
 import struct 
 
+
+def read_name(f):
+    return str(f.read(4), "ascii")
+
+
+def write_name(f, name):
+    if len(name) != 4:
+        raise RuntimeError("Name length not 4")
+    f.write(bytes(name, encoding="ascii"))
+
+
 def read_uint32(f):
     return struct.unpack(">I", f.read(4))[0]
 
@@ -10,6 +21,7 @@ def read_uint16(f):
     
 def read_int16(f):
     return struct.unpack(">h", f.read(2))[0]
+
 
 def read_int16_at(f, offset):
     f.seek(offset)
@@ -45,12 +57,21 @@ def write_uint32(f, val):
     
 def write_uint16(f, val):
     f.write(struct.pack(">H", val))
-    
-    
+
+
+def write_int16(f, val):
+    f.write(struct.pack(">h", val))
+
+
 def write_uint8(f, val):
     f.write(struct.pack(">B", val))
     
     
 def write_float(f, val):
     f.write(struct.pack(">f", val))
-    
+
+
+def write_pad(f, multiple):
+    next_aligned_pos = (f.tell() + (multiple-1)) & ~(multiple-1)
+
+    f.write(b"\x00"*(next_aligned_pos - f.tell()))
