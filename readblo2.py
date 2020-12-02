@@ -3,9 +3,6 @@ from binascii import hexlify, unhexlify
 from mat1.mat1 import MAT1
 
 
-
-
-
 class Node(object): 
     def __init__(self):
         self.children = []
@@ -70,8 +67,20 @@ class Node(object):
         return node 
     
     def write(self, f):
-        pass 
-    
+        count = 0
+        for child in self.children:
+            if isinstance(child, Node):
+                f.write(b"BGN1")
+                write_uint32(f, 8)
+                count += child.write(f) + 2
+                f.write(b"END1")
+                write_uint32(f, 8)
+            else:
+                count += 1
+                child.write(f)
+
+        return count
+
     def serialize(self):
         result = []
         for child in self.children:
@@ -130,6 +139,7 @@ class Item(object):
 
 class Pane(object):
     def __init__(self):
+        self.name = "PAN2"
         self.p_name = "PAN2"
         
     @classmethod
@@ -200,10 +210,11 @@ class Pane(object):
 
     def serialize(self):
         result = {}
+        result["type"] = "PAN2"
         result["p_type"] = "PAN2"
 
         for key, val in self.__dict__.items():
-            if key != "name":
+            if key != "name" and key != "p_name":
                 if isinstance(val, bytes):
                     raise RuntimeError("hhhe")
                 result[key] = val 
@@ -234,31 +245,6 @@ class Pane(object):
         return pane
 
 
-class _PaneWrapper(Pane):
-    def __init__(self, name=""):
-        super().__init__()
-
-    @classmethod
-    def from_file(cls, f):
-        start = f.tell()
-        name = str(f.read(4), "ascii")
-        print(name)
-        size = read_uint32(f)
-        pane = super().from_file(f)
-        print(pane, type(pane))
-        pane.name = name
-        f.seek(start+8)
-        pane.data = f.read(size-8)
-
-        return pane
-
-    def skip_pane(self, f):
-        name = f.read(4)
-        print(name)
-        assert name in (b"PAN2", b"pan2")
-        f.seek(f.tell()+0x48-4)
-
-
 class Window(Pane):
     def __init__(self):
         super().__init__()
@@ -280,7 +266,7 @@ class Window(Pane):
         window.size = read_uint16(f)
         reserved = f.read(6)
         assert reserved == b"RESERV"
-        window.padding = f.read(8).decode("ascii", errors="backslashreplace")
+        window.padding = str(hexlify(f.read(8)), encoding="ascii")#.decode("ascii", errors="backslashreplace")
         #assert window.padding == "\xFF"*8
         window.subdata = [{}, {}, {}, {}]
         for i in range(4):
@@ -312,8 +298,8 @@ class Window(Pane):
         write_uint16(f, self.size)
 
         f.write(b"RESERV")
-        f.write(bytes(self.padding, encoding="ascii"))
-
+        f.write(unhexlify(self.padding))
+        assert len(unhexlify(self.padding)) == 8
         for i in range(4):
             write_uint16(f, self.subdata[i]["sub_unk1"])
 
@@ -373,7 +359,7 @@ class Picture(Pane):
         name = read_name(f)
         size = read_uint32(f)
         if name != "PIC2":
-            raise RuntimeError("Not a PIC2 section: {}".format(picture.name))
+            raise RuntimeError("Not a PIC2 section: {}".format(name))
         picture = super(Picture, cls).from_file(f)
         picture.name = name
 
@@ -598,31 +584,33 @@ class ResourceReference(Item):
         start = f.tell()
         f.write(bytes(self.ResName(), encoding="ascii"))
         f.write(b"ABCD")
-        write_uint16(len(self.references))
+        write_uint16(f, len(self.references))
         f.write(b"\xFF\xFF")
         write_uint32(f, 0x10)
-        offsets = []
+        offsets = {}
         namestart = f.tell()
         write_uint16(f, len(self.references))
         f.write(b"\xAB\xCD"*len(self.references))
-        write_pad(f, 4)
+        #write_pad(f, 2)
 
         for ref in self.references:
-            offset = f.tell()-namestart
-            write_uint8(f, 0x2)
-            write_uint8(f, len(ref))
-            f.write(bytes(ref, encoding="shift-jis"))
-            write_pad(f, 4)
-
+            if ref not in offsets:
+                offsets[ref] = f.tell()-namestart
+                write_uint8(f, 0x2)
+                write_uint8(f, len(ref))
+                f.write(bytes(ref, encoding="shift-jis"))
+                #write_pad(f, 4)
+        write_pad(f, 0x20)
         curr = f.tell()
         f.seek(namestart+2)
-        for offset in offsets:
+        for ref in self.references:
+            offset = offsets[ref]
             write_uint16(f, offset)
+
 
         f.seek(start+4)
         write_uint32(f, curr-start)
         f.seek(curr)
-
 
     def serialize(self):
         result = {"type": self.ResName()}
@@ -683,6 +671,7 @@ class Information(object):
         write_uint8(f, self.val2)
         write_uint8(f, self.val3)
         write_uint8(f, self.val4)
+        write_pad(f, 0x20)
         
     def serialize(self):
         result = {}
@@ -729,16 +718,36 @@ class ScreenBlo(object):
         blo.info = Information.from_file(f)
         
         blo.root = Node.from_file(f)
-            
-        
-        return blo 
-    
+
+        return blo
+
+    def write(self, f):
+        start = f.tell()
+        f.write(b"SCRNblo2")
+        f.write(b"ABCD0123")  # placeholder for size + count
+        f.write(b"SVR1")
+        f.write(b"\xFF"*12)
+
+        self.info.write(f)
+        count = self.root.write(f)
+        print(hex(count))
+        f.write(b"EXT1")
+        write_uint32(f, 0x8)
+        write_pad(f, 0x20)
+        curr = f.tell()
+
+        f.seek(0x8)
+        write_uint32(f, curr-start)
+        write_uint32(f, count+2)  # Add in INF and EXT section
+        f.seek(curr)
+
     def serialize(self):
         result = []
         result.append(self.info.serialize())
         result.append(self.root.serialize())
         
         return result 
+
 
 if __name__ == "__main__":  
     import json 
@@ -760,3 +769,11 @@ if __name__ == "__main__":
     result = blo.serialize()
     with open(outputfile, "w") as f:
         json.dump(result, f, indent=4)
+
+    with open(inputfile+"_2.blo", "wb") as f:
+        blo.write(f)
+
+    """with open(inputfile, "rb") as f:
+        f.seek(0x20)
+        for i in range(0xA4):
+            da = Item.from_file(f)"""
