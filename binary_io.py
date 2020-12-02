@@ -71,7 +71,12 @@ def write_float(f, val):
     f.write(struct.pack(">f", val))
 
 
+padding_msg = b"This is padding data to align"
+
+
 def write_pad(f, multiple):
     next_aligned_pos = (f.tell() + (multiple-1)) & ~(multiple-1)
 
-    f.write(b"\x00"*(next_aligned_pos - f.tell()))
+    for i in range(next_aligned_pos - f.tell()):
+        f.write(padding_msg[i%len(padding_msg):i%len(padding_msg)+1])
+    #f.write(b"\x00"*(next_aligned_pos - f.tell()))
