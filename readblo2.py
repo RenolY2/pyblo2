@@ -3,6 +3,9 @@ from binascii import hexlify, unhexlify
 from mat1.mat1 import MAT1
 
 
+
+
+
 class Node(object): 
     def __init__(self):
         self.children = []
@@ -125,22 +128,21 @@ class Item(object):
         return item 
 
 
-class Pane(Item):
-    def __init__(self, name=""):
-        super().__init__("PAN2")
+class Pane(object):
+    def __init__(self):
+        self.p_name = "PAN2"
         
     @classmethod
     def from_file(cls, f):
         start = f.tell()
-        pane = super().from_file(f)
-
-        if pane.name not in ("PAN2", "pan2"):
+        pane = cls()
+        pane.p_name = read_name(f)
+        if pane.p_name not in ("PAN2", "pan2"):
             raise RuntimeError("Not a PAN2 or pan2 section but {}".format(pane.name))
-        f.seek(start+4)
         size = read_uint32(f)
+        assert size == 0x48
         unk = read_uint16(f)
         assert unk == 0x40
-        
 
         pane.p_unk1 = read_uint16(f) # 0xA
         pane.p_unk2 = read_uint8(f) # 0xC
@@ -166,22 +168,73 @@ class Pane(Item):
         pane.p_unk4 = read_float(f)
         
         assert f.tell() == start + 0x48
-        return pane 
-        
+        return pane
+
+    def write(self, f):
+        start = f.tell()
+        write_name(f, self.p_name)
+        write_uint32(f, 0x48)
+        write_uint16(f, 0x40)
+
+
+        write_uint16(f, self.p_unk1)
+        write_uint8(f, self.p_unk2)
+        write_uint8(f, self.p_unk3)
+        f.write(b"RE")
+        f.write(bytes(self.p_panename, encoding="ascii"))
+
+        write_float(f, self.p_size_x)
+        write_float(f, self.p_size_y)
+        write_float(f, self.p_scale_x)
+        write_float(f, self.p_scale_y)
+
+        write_float(f, 0.0)
+        write_float(f, 0.0)
+
+        write_float(f, self.p_rotation)
+        write_float(f, self.p_offset_x)
+        write_float(f, self.p_offset_y)
+        write_float(f, self.p_unk4)
+
+        assert f.tell() == start + 0x48
+
     def serialize(self):
-        result = super().serialize()
-        result["type"] = "PAN2"
-        del result["data"]
+        result = {}
+        result["p_type"] = "PAN2"
+
         for key, val in self.__dict__.items():
-            if key != "name" and key != "data":
+            if key != "name":
                 if isinstance(val, bytes):
                     raise RuntimeError("hhhe")
                 result[key] = val 
                 
-        return result 
+        return result
+
+    def assign_value(self, src, field):
+        self.__dict__[field] = src[field]
+
+    @classmethod
+    def deserialize(cls, obj):
+        assert "p_type" in obj and obj["p_type"] in ("PAN2", "pan2")
+        pane = cls()
+        pane.assign_value(obj, "p_name")
+        pane.assign_value(obj, "p_unk1")
+        pane.assign_value(obj, "p_unk2")
+        pane.assign_value(obj, "p_unk3")
+        pane.assign_value(obj, "p_panename")
+        pane.assign_value(obj, "p_size_x")
+        pane.assign_value(obj, "p_size_y")
+        pane.assign_value(obj, "p_scale_x")
+        pane.assign_value(obj, "p_scale_y")
+        pane.assign_value(obj, "p_rotation")
+        pane.assign_value(obj, "p_offset_x")
+        pane.assign_value(obj, "p_offset_y")
+        pane.assign_value(obj, "p_unk4")
+
+        return pane
 
 
-class PaneWrapper(Pane):
+class _PaneWrapper(Pane):
     def __init__(self, name=""):
         super().__init__()
 
@@ -206,21 +259,25 @@ class PaneWrapper(Pane):
         f.seek(f.tell()+0x48-4)
 
 
-class Window(PaneWrapper):
-    def __init__(self, name=""):
+class Window(Pane):
+    def __init__(self):
         super().__init__()
         self.name = "WIN2"
 
     @classmethod
     def from_file(cls, f):
         start = f.tell()
-        window = super(Window, cls).from_file(f)
-        if window.name != "WIN2":
-            raise RuntimeError("Not a WIN2 section")
-        f.seek(start+0x8)
-        window.skip_pane(f)
+        name = read_name(f)
+        size = read_uint32(f)
+        assert size == 0x90
 
-        window.win_size = read_uint16(f)
+        if name != "WIN2":
+            raise RuntimeError("Not a WIN2 section")
+
+        window = super(Window, cls).from_file(f)
+        window.name = name
+
+        window.size = read_uint16(f)
         reserved = f.read(6)
         assert reserved == b"RESERV"
         window.padding = f.read(8).decode("ascii", errors="backslashreplace")
@@ -228,14 +285,14 @@ class Window(PaneWrapper):
         window.subdata = [{}, {}, {}, {}]
         for i in range(4):
             window.subdata[i]["sub_unk1"] = read_uint16(f)
-        window.Wunkbyte1 = read_uint8(f)
-        window.Wunkbyte2 = read_uint8(f)
-        window.Wunk3 = read_uint16(f)
-        window.Wunk4 = read_uint16(f)
-        window.Wunk5 = read_uint16(f)
-        window.Wunk6 = read_uint16(f)
-        window.Wunk7 = read_uint16(f)
-        window.Wunk8 = read_uint16(f)
+        window.unkbyte1 = read_uint8(f)
+        window.unkbyte2 = read_uint8(f)
+        window.unk3 = read_uint16(f)
+        window.unk4 = read_uint16(f)
+        window.unk5 = read_uint16(f)
+        window.unk6 = read_uint16(f)
+        window.unk7 = read_uint16(f)
+        window.unk8 = read_uint16(f)
         
         re = f.read(2)
         assert re == b"RE"
@@ -246,37 +303,83 @@ class Window(PaneWrapper):
             window.subdata[i]["sub_unk3"] = hex(read_uint32(f))
         assert f.tell() == start+0x90
         return window 
-        
+
+    def write(self, f):
+        start = f.tell()
+        write_name(f, self.name)
+        write_uint32(f, 0x90)
+        super().write(f) # Write pane
+        write_uint16(f, self.size)
+
+        f.write(b"RESERV")
+        f.write(bytes(self.padding, encoding="ascii"))
+
+        for i in range(4):
+            write_uint16(f, self.subdata[i]["sub_unk1"])
+
+        write_uint8(f, self.unkbyte1)
+        write_uint8(f, self.unkbyte2)
+        write_uint16(f, self.unk3)
+        write_uint16(f, self.unk4)
+        write_uint16(f, self.unk5)
+        write_uint16(f, self.unk6)
+        write_uint16(f, self.unk7)
+        write_uint16(f, self.unk8)
+
+        f.write(b"RE")
+
+        for i in range(4):
+            write_uint16(f, self.subdata[i]["sub_unk2"])
+
+        for i in range(4):
+            write_uint32(f, int(self.subdata[i]["sub_unk3"], 16))
+
+        assert f.tell() == start + 0x90
+
     def serialize(self):
         result = super().serialize()
         result["type"] = "WIN2"
         
         return result 
-    
-    
-class Picture(PaneWrapper):
-    def __init__(self, name=""):
+
+    @classmethod
+    def deserialize(cls, obj):
+        assert "type" in obj and obj["type"] == "WIN2"
+        window = super(Window, cls).deserialize(obj)
+
+        window.assign_value(obj, "size")
+        window.assign_value(obj, "padding")
+        window.assign_value(obj, "subdata")
+        window.assign_value(obj, "unkbyte1")
+        window.assign_value(obj, "unkbyte2")
+        window.assign_value(obj, "unk3")
+        window.assign_value(obj, "unk4")
+        window.assign_value(obj, "unk5")
+        window.assign_value(obj, "unk6")
+        window.assign_value(obj, "unk7")
+        window.assign_value(obj, "unk8")
+
+        return window
+
+
+class Picture(Pane):
+    def __init__(self):
         super().__init__()
         self.name = "PIC2"
-        self.pane = Pane()
     
     @classmethod
     def from_file(cls, f):
         start = f.tell()
-        picture = super(Picture, cls).from_file(f)
-        if picture.name != "PIC2":
+        name = read_name(f)
+        size = read_uint32(f)
+        if name != "PIC2":
             raise RuntimeError("Not a PIC2 section: {}".format(picture.name))
-        f.seek(start)
-        print(f.read(8))
-        f.seek(start+8)
-        print(hex(f.tell()))
-        picture.skip_pane(f)
-        print(hex(f.tell()))
+        picture = super(Picture, cls).from_file(f)
+        picture.name = name
 
-        picture_size = read_uint16(f)
+        picture.size = read_uint16(f)
         picture.material = read_uint16(f)
         picture.texture = read_uint16(f)
-
         
         re = f.read(2)
         assert re == b"RE"
@@ -300,36 +403,73 @@ class Picture(PaneWrapper):
         
         assert f.tell() == start+0x80
         return picture 
-    
+
+    def write(self, f):
+        start = f.tell()
+        write_name(f, self.name)
+        write_uint32(f, 0x80)
+        super().write(f)  # Write pane
+        write_uint16(f, self.size)
+        write_uint16(f, self.material)
+        write_uint16(f, self.texture)
+        f.write(b"RE")
+        write_uint16(f, self.color1["unk1"])
+        write_uint16(f, self.color1["unk2"])
+        write_uint16(f, self.color2["unk1"])
+        write_uint16(f, self.color2["unk2"])
+
+        for x in range(4):
+            write_uint16(f, self.color1["unknowns"][x])
+        for x in range(4):
+            write_uint16(f, self.color2["unknowns"][x])
+
+        for x in range(4):
+            write_uint8(f, self.color1["col1"][x])
+        for x in range(4):
+            write_uint8(f, self.color1["col2"][x])
+        for x in range(4):
+            write_uint8(f, self.color2["col1"][x])
+        for x in range(4):
+            write_uint8(f, self.color2["col2"][x])
+
+        assert f.tell() == start + 0x80
+
     def serialize(self):
-        result = {"type": "PIC2"}
-        for key, val in self.__dict__.items():
-            if key != "name" and key != "data":
-                if isinstance(val, bytes):
-                    raise RuntimeError("hhhe")
-                result[key] = val
-        result["pane"] = self.pane.serialize()
+        result = super().serialize()
+        result["type"] = "PIC2"
         
-        return result 
+        return result
+
+    @classmethod
+    def deserialize(cls, obj):
+        assert "type" in obj and obj["type"] == "PIC2"
+        window = super(Picture, cls).deserialize(obj)
+
+        window.assign_value(obj, "size")
+        window.assign_value(obj, "material")
+        window.assign_value(obj, "texture")
+        window.assign_value(obj, "color1")
+        window.assign_value(obj, "color2")
+
+        return window
 
 
-class Textbox(PaneWrapper):
+class Textbox(Pane):
     def __init__(self):
         super().__init__()
         self.name = "TBX2"
-        self.pane = Pane()
     
     @classmethod
     def from_file(cls, f):
         start = f.tell()
-        textbox = super(Textbox, cls).from_file(f)
-        if textbox.name != "TBX2":
-            raise RuntimeError("Not a TBX2 section")
-        f.seek(start+4)
+        name = read_name(f)
         size = read_uint32(f)
-        textbox.skip_pane(f)
 
-        textbox_size = read_uint16(f)
+        if name != "TBX2":
+            raise RuntimeError("Not a TBX2 section")
+        textbox = super(Textbox, cls).from_file(f)
+
+        textbox.size = read_uint16(f)
         textbox.unk1 = read_uint16(f)
         textbox.unk2 = read_uint16(f)
         textbox.signedunk3 = read_int16(f)
@@ -348,18 +488,67 @@ class Textbox(PaneWrapper):
         assert f.tell() == start+0x70
         textbox.text = f.read(stringlength).decode("shift-jis", errors="backslashreplace")
         f.seek(start+size)
-        return textbox 
+        return textbox
+
+    def write(self, f):
+        start = f.tell()
+        write_name(f, self.name)
+        write_uint32(0x70)
+        super().write(f)
+
+        write_uint16(f, self.size)
+        write_uint16(f, self.unk1)
+        write_uint16(f, self.unk2)
+        write_int16(f, self.signedunk3)
+        write_int16(f, self.signedunk4)
+        write_uint16(f, self.unk5)
+        write_uint16(f, self.unk6)
+        write_uint8(f, self.unk7byte)
+        write_uint8(f, self.unk8byte)
+        write_uint32(f, self.unk9)
+        write_uint32(f, self.unk10)
+        write_uint8(f, self.unk11)
+        f.write(b"RES")
+        write_uint16(f, self.unk12)
+
+        text = bytes(self.text, encoding="shift-jis")
+        write_uint16(f, len(text))
+        f.write(text)
+        f.write(b"\x00")
+        write_pad(f, 4)
+        curr = f.tell()
+        f.seek(start+4)
+        write_uint32(curr-start)
+        f.seek(curr)
     
     def serialize(self):
-        result = {"type": "TBX2"}
-        for key, val in self.__dict__.items():
-            if key != "name" and key != "data":
-                if isinstance(val, bytes):
-                    raise RuntimeError("hhhe")
-                result[key] = val
-        result["pane"] = self.pane.serialize()
-        
-        return result 
+        result = super().serialize()
+        result["type"] = "TBX2"
+
+        return result
+
+    @classmethod
+    def deserialize(cls, obj):
+        assert "type" in obj and obj["type"] == "TBX2"
+        window = super(Textbox, cls).deserialize(obj)
+
+        window.assign_value(obj, "size")
+        window.assign_value(obj, "unk1")
+        window.assign_value(obj, "unk2")
+        window.assign_value(obj, "signedunk3")
+        window.assign_value(obj, "signedunk4")
+        window.assign_value(obj, "unk5")
+        window.assign_value(obj, "unk6")
+        window.assign_value(obj, "unk7byte")
+        window.assign_value(obj, "unk8byte")
+        window.assign_value(obj, "unk9")
+        window.assign_value(obj, "unk10")
+        window.assign_value(obj, "unk11")
+        window.assign_value(obj, "unk12")
+
+        window.assign_value(obj, "text")
+
+        return window
 
 
 class ResourceReference(Item):
@@ -375,7 +564,7 @@ class ResourceReference(Item):
     def from_file(cls, f):
         start = f.tell()
         if f.read(4) != bytes(cls.ResName(), encoding="ascii"):
-            raise RuntimeError("Not a {0} section".format(self.ResName()))
+            raise RuntimeError("Not a {0} section".format(cls.ResName()))
         resreference = cls()
         size = read_uint32(f)
         
@@ -404,12 +593,49 @@ class ResourceReference(Item):
             
         f.seek(start+size)
         return resreference
-    
+
+    def write(self, f):
+        start = f.tell()
+        f.write(bytes(self.ResName(), encoding="ascii"))
+        f.write(b"ABCD")
+        write_uint16(len(self.references))
+        f.write(b"\xFF\xFF")
+        write_uint32(f, 0x10)
+        offsets = []
+        namestart = f.tell()
+        write_uint16(f, len(self.references))
+        f.write(b"\xAB\xCD"*len(self.references))
+        write_pad(f, 4)
+
+        for ref in self.references:
+            offset = f.tell()-namestart
+            write_uint8(f, 0x2)
+            write_uint8(f, len(ref))
+            f.write(bytes(ref, encoding="shift-jis"))
+            write_pad(f, 4)
+
+        curr = f.tell()
+        f.seek(namestart+2)
+        for offset in offsets:
+            write_uint16(f, offset)
+
+        f.seek(start+4)
+        write_uint32(f, curr-start)
+        f.seek(curr)
+
+
     def serialize(self):
         result = {"type": self.ResName()}
         result["references"] = self.references 
         
-        return result 
+        return result
+
+    @classmethod
+    def deserialize(cls, obj):
+        res = cls()
+        assert obj["type"] == cls.ResName()
+        res.references = obj["references"]
+        return res
 
 
 class TextureNames(ResourceReference):
