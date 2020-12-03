@@ -1,5 +1,7 @@
-from binary_io import read_uint32, read_uint16, read_int8_at, read_int16_at
-    
+import struct
+from binary_io import *
+from mat1.enums import *
+
 class StringTable(object):
     def __init__(self):
         self.strings = []
@@ -79,6 +81,7 @@ class StringTable(object):
 
 def read_index_array(f, offset, size, count):
     values = []
+    read_at = None
     if size == 1:
         read_at = read_int8_at 
     elif size == 2:
@@ -88,16 +91,29 @@ def read_index_array(f, offset, size, count):
         value = read_at(f, offset + i*size)
         values.append(value)
     
-    return values 
-    
+    return values
+
+
+def write_index_array(f, array, offset, size, count):
+    assert len(array) == count
+
+    values = []
+    write_at = None
+    if size == 1:
+        write_at = write_int8_at
+    elif size == 2:
+        write_at = write_int16_at
+
+    for i in range(count):
+        write_at(f, array[i], offset + i * size)
+
 
 class MaterialInitData(object):
     def __init__(self):
-        pass 
-        
+        pass
         
     @classmethod
-    def from_array(cls, f, i):
+    def from_array(cls, f, i, offsets):
         initdata = cls()
         start = f.tell()
         
@@ -106,9 +122,17 @@ class MaterialInitData(object):
         f.seek(start)
         
         cullmodeIndex = read_int8_at(f, initdatastart + 0x1)
+        initdata.cullmode = CullModeSetting.from_array(f, offsets["GXCullMode"], cullmodeIndex)
+
         colorChannelNumIndex = read_int8_at(f, initdatastart + 0x2)
+        initdata.color_channel_count = read_int8_at(f, offsets["UcArray3_TexGenCount"]+colorChannelNumIndex)
+
         texGenNumIndex = read_int8_at(f, initdatastart + 0x3)
+        initdata.tex_gen_count = read_int8_at(f, offsets["UcArray2_ColorChannelCount"]+texGenNumIndex)
+
         tevStageNumIndex = read_int8_at(f, initdatastart + 0x4)
+        initdata.tev_stage_count = read_int8_at(f, offsets["UCArray6_Tevstagenums"] + tevStageNumIndex)
+
         ditherIndex = read_int8_at(f, initdatastart + 0x5) 
         unk = read_int8_at(f, initdatastart + 0x6) 
         
@@ -166,7 +190,9 @@ class MaterialInitData(object):
         blendIndex = read_int16_at(f, initdatastart + 0xE4) 
         
         # 2 byte padding
-        
+
+
+
         return initdata 
         
         
@@ -194,7 +220,7 @@ class MAT1(object):
         
         offsets = {}
         for datatype in ("MaterialInitData", "MaterialIndexRemapTable", "MaterialNames", "IndirectInitData", "GXCullMode", "MaterialColor",
-                        "UcArray2_ColorChannelCount", "ColorChannelInfo", "UcArray3", "TexCoordInfo", "TexMatrixInfo", "UsArray4_TextureIndices", 
+                        "UcArray2_ColorChannelCount", "ColorChannelInfo", "UcArray3_TexGenCount", "TexCoordInfo", "TexMatrixInfo", "UsArray4_TextureIndices",
                         "UsArray5", "TevOrderInfo", "GXColorS10", "GXColor2_TevKColors", "UCArray6_Tevstagenums", "TevStageInfo2", 
                         "TevSwapModeInfo", "TevSwapModeTableInfo", "AlphaCompInfo", "BlendInfo", "UcArray7"):
             
@@ -202,7 +228,8 @@ class MAT1(object):
         
         if offsets["IndirectInitData"] == start or offsets["IndirectInitData"]-offsets["MaterialNames"] < 5:
             offsets["IndirectInitData"] = 0
-        
+        assert offsets["IndirectInitData"] == 0
+
         f.seek(offsets["MaterialNames"])
         mat1.material_names = StringTable.from_file(f)
         
