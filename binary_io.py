@@ -65,7 +65,17 @@ def write_int16(f, val):
 
 def write_uint8(f, val):
     f.write(struct.pack(">B", val))
-    
+
+
+def write_int16_at(f, val, offset):
+    f.seek(offset)
+    f.write(struct.pack(">h", val))
+
+
+def write_int8_at(f, val, offset):
+    f.seek(offset)
+    f.write(struct.pack(">b", val))
+
     
 def write_float(f, val):
     f.write(struct.pack(">f", val))
