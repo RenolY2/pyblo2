@@ -1,6 +1,7 @@
 import struct
 from binary_io import *
 from mat1.enums import *
+from mat1.datatypes import *
 
 class StringTable(object):
     def __init__(self):
@@ -133,17 +134,38 @@ class MaterialInitData(object):
         tevStageNumIndex = read_int8_at(f, initdatastart + 0x4)
         initdata.tev_stage_count = read_int8_at(f, offsets["UCArray6_Tevstagenums"] + tevStageNumIndex)
 
-        ditherIndex = read_int8_at(f, initdatastart + 0x5) 
-        unk = read_int8_at(f, initdatastart + 0x6) 
+        ditherIndex = read_int8_at(f, initdatastart + 0x5)
+        initdata.dither = read_int8_at(f, offsets["UcArray7_Dither"] + ditherIndex)
+        unk = read_int8_at(f, initdatastart + 0x6)
+        initdata.unk = unk
         
         # 0x7 padding 
         
         # 2 Mat Colors starting at 0x8 (2 byte index)
         matColorIndices = read_index_array(f, initdatastart + 0x8, 2, 2)
+        initdata.matcolors = []
+        for index in matColorIndices:
+            if index == -1:
+                initdata.matcolors.append(None)
+            else:
+                color = Color.from_array(f, offsets["MaterialColor"], index)
+                initdata.matcolors.append(color)
         
         # 4 ColorChans starting at 0xC (2 byte index) 
         colorChanIndices = read_index_array(f, initdatastart + 0xC, 2, 4)
-        
+        initdata.color_channels = []
+        for i in range(4):
+            index = colorChanIndices[i]
+            if index == -1:
+                initdata.color_channels.append(None)
+            else:
+                if i < 2 or initdata.color_channel_count != 0:
+                    initdata.color_channels.append(ChannelControl.from_array(f, "ColorChannelInfo", index))
+                else:
+                    initdata.color_channels.append(None)
+
+
+
         # 8 texcoords starting at 0x14 (2 byte index)
         texCoordIncides = read_index_array(f, initdatastart + 0x14, 2, 8)
         
@@ -222,7 +244,7 @@ class MAT1(object):
         for datatype in ("MaterialInitData", "MaterialIndexRemapTable", "MaterialNames", "IndirectInitData", "GXCullMode", "MaterialColor",
                         "UcArray2_ColorChannelCount", "ColorChannelInfo", "UcArray3_TexGenCount", "TexCoordInfo", "TexMatrixInfo", "UsArray4_TextureIndices",
                         "UsArray5", "TevOrderInfo", "GXColorS10", "GXColor2_TevKColors", "UCArray6_Tevstagenums", "TevStageInfo2", 
-                        "TevSwapModeInfo", "TevSwapModeTableInfo", "AlphaCompInfo", "BlendInfo", "UcArray7"):
+                        "TevSwapModeInfo", "TevSwapModeTableInfo", "AlphaCompInfo", "BlendInfo", "UcArray7_Dither"):
             
             offsets[datatype] = start + read_uint32(f)
         
