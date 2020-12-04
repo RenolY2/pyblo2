@@ -2,16 +2,19 @@ from enum import Enum, IntEnum
 from binary_io import *
 
 
-class CullModeSetting(object):
-    enum = IntEnum("CullMode", ["NONE", "FRONT", "BACK", "ALL"], start=0)
+class GXEnum(object):
+    enum = IntEnum("PlaceHolder", ["NONE"])
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.value = self.enum.NONE
+    def __init__(self):
+        self.value = self.enum(0)
 
     @classmethod
     def from_array(cls, f, start, i):
         f.seek(start + i)
+        return cls.from_file(f)
+
+    @classmethod
+    def from_file(cls, f):
         value = read_uint8(f)
         cullmode = cls()
         cullmode.value = cls.enum(value)
@@ -22,6 +25,42 @@ class CullModeSetting(object):
 
     def __eq__(self, other):
         return type(self) == type(other) and self.value == other.value
+
+
+class CullModeSetting(GXEnum):
+    enum = IntEnum("CullMode", ["NONE", "FRONT", "BACK", "ALL"], start=0)
+
+
+class ColorSource(GXEnum):
+    enum = IntEnum("ColorSource", ["REGISTER", "VERTEX"], start=0)
+
+
+LIGHTID_ENUMS = []
+# Need to generate 256 enums for the 256 possible combinations of light ids 0-7
+for i in range(256):
+    if i == 0:
+        lightid = "NONE"
+    else:
+        lightid = "LIGHT"
+
+        for j in range(8):
+            if i & (1 << j):
+                lightid += str(j)
+    LIGHTID_ENUMS.append(lightid)
+
+
+class LightId(GXEnum):
+    enum = IntEnum("LightId", LIGHTID_ENUMS, start=0)
+
+
+class DiffuseFunction(GXEnum):
+    enum = IntEnum("DiffuseFunction", ["NONE", "SIGNED", "CLAMP"], start=0)
+
+
+class J3DAttentuationFunction(GXEnum):
+    enum = IntEnum("AttentuationFunction", ["NONE", "SPEC", "NONE_2", "SPOT"], start=0)
+
+
 
 
 if __name__ == "__main__":
