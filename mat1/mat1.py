@@ -3,6 +3,7 @@ from binary_io import *
 from mat1.enums import *
 from mat1.datatypes import *
 
+
 class StringTable(object):
     def __init__(self):
         self.strings = []
@@ -79,6 +80,8 @@ class StringTable(object):
 
         f.seek(end)
 
+    def serialize(self):
+        return self.strings
 
 def read_index_array(f, offset, size, count):
     values = []
@@ -114,13 +117,13 @@ class MaterialInitData(object):
         pass
         
     @classmethod
-    def from_array(cls, f, i, offsets):
+    def from_array(cls, f, start, i, offsets):
         initdata = cls()
-        start = f.tell()
+        #start = f.tell()
         
         f.seek(start + i * 0xE8) # 0xE8 is size of Material Init Data entry
         initdatastart = f.tell()
-        f.seek(start)
+        #f.seek(start)
         
         cullmodeIndex = read_int8_at(f, initdatastart + 0x1)
         initdata.cullmode = CullModeSetting.from_array(f, offsets["GXCullMode"], cullmodeIndex)
@@ -160,7 +163,7 @@ class MaterialInitData(object):
                 initdata.color_channels.append(None)
             else:
                 if i < 2 or initdata.color_channel_count != 0:
-                    initdata.color_channels.append(ChannelControl.from_array(f, "ColorChannelInfo", index))
+                    initdata.color_channels.append(ChannelControl.from_array(f, offsets["ColorChannelInfo"], index))
                 else:
                     initdata.color_channels.append(None)
 
@@ -254,12 +257,32 @@ class MaterialInitData(object):
 
         # 2 byte padding
         return initdata
-        
+
+    def serialize(self):
+        result = {}
+        for k, v in self.__dict__.items():
+            if isinstance(v, (UnknownData, GXEnum, Color)):
+                result[k] = v.serialize()
+            elif isinstance(v, list):
+                newlist = []
+                for val in v:
+                    if isinstance(val, (UnknownData, GXEnum, Color)):
+                        newlist.append(val.serialize())
+                    else:
+                        newlist.append(val)
+                result[k] = newlist
+            else:
+                print(v)
+                result[k] = v
+
+        return result
+
         
 class MAT1(object):
     def __init__(self):
+        self.name = "MAT1"
         self.material_names = StringTable()
-        self.material_count = 0
+        self.materials = []
         
     @classmethod
     def from_file(cls, f):
@@ -270,7 +293,7 @@ class MAT1(object):
             raise RuntimeError("Not a MAT1 section!")
         mat1 = cls()    
         sectionsize = read_uint32(f)
-        mat1.material_count = read_uint16(f)
+        material_count = read_uint16(f)
         
         f.read(2) # padding 
         
@@ -293,11 +316,20 @@ class MAT1(object):
         f.seek(offsets["MaterialNames"])
         mat1.material_names = StringTable.from_file(f)
         
-        for i in range(mat1.material_count):
+        for i in range(material_count):
             f.seek(offsets["MaterialIndexRemapTable"] + i*2)
             initdataindex = read_uint16(f)
             
             f.seek(offsets["MaterialInitData"])
-            materialinitdata = MaterialInitData.from_array(f, initdataindex)
-        
+            materialinitdata = MaterialInitData.from_array(f, offsets["MaterialInitData"], initdataindex, offsets)
+            mat1.materials.append(materialinitdata)
+        f.seek(start+sectionsize)
         return mat1
+
+    def serialize(self):
+        result = {"name": "MAT1"}
+        result["MaterialNames"] = self.material_names.serialize()
+        result["Materials"] = [mat.serialize() for mat in self.materials]
+
+        return result
+

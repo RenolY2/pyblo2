@@ -42,10 +42,13 @@ class Node(object):
                 print("Set the materials")
                 thing = f.tell()
                 mat1 = MAT1.from_file(f)
+                spot = f.tell()
                 f.seek(thing)
-                node.materials = Item.from_file(f)
+                Item.from_file(f)
+                print("compare", hex(spot), hex(f.tell()))
+                node.materials = mat1#Item.from_file(f)
                 node.children.append(node.materials)
-                print(mat1.material_count, "materials")
+                print(len(mat1.materials), "materials")
                 print(mat1.material_names.strings)
             
             elif next == b"PAN2":
@@ -774,8 +777,9 @@ if __name__ == "__main__":
     import json 
     import sys
     #inputfile = sys.argv[1]
+    inputfile = "cave_pikmin.blo"
     #inputfile = "courseselect_under.blo"
-    inputfile = "anim_text.blo"
+    #inputfile = "anim_text.blo"
     outputfile = inputfile + ".json"
     with open(inputfile, "rb") as f:
     #with open("anim_text.blo", "rb") as f:
@@ -792,7 +796,7 @@ if __name__ == "__main__":
     with open(outputfile, "w") as f:
         json.dump(result, f, indent=4)
 
-    with open(inputfile+"_2.blo", "wb") as f:
+    """with open(inputfile+"_2.blo", "wb") as f:
         blo.write(f)
 
     with open(outputfile, "r") as f:
@@ -803,7 +807,7 @@ if __name__ == "__main__":
         json.dump(blo.serialize(), f, indent=4)
 
     with open(inputfile+"_3.blo", "wb") as f:
-        blo.write(f)
+        blo.write(f)"""
 
     """with open(inputfile, "rb") as f:
         f.seek(0x20)

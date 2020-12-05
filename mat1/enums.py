@@ -23,6 +23,9 @@ class GXEnum(object):
     def write(self, f):
         write_uint8(f, self.value)
 
+    def serialize(self):
+        return str(self.value)
+
     def __eq__(self, other):
         return type(self) == type(other) and self.value == other.value
 

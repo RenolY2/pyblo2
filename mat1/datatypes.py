@@ -1,4 +1,6 @@
+from binascii import hexlify
 from binary_io import *
+
 from mat1.enums import *
 
 
@@ -22,6 +24,8 @@ class Color(object):
         write_uint8(f, self.b)
         write_uint8(f, self.a)
 
+    def serialize(self):
+        return [self.r, self.g, self.b, self.a]
 """
 class ChannelControl(object):
     def __init__(self):
@@ -81,12 +85,16 @@ class UnknownData(object):
 
     @classmethod
     def from_array(cls, f, start, i):
+        print(start, i, cls.size)
         f.seek(start + i*cls.size)
         return cls.from_file(f)
 
     def write(self, f):
         assert len(self.data) == self.size
         f.write(self.data)
+
+    def serialize(self):
+        return str(hexlify(self.data), encoding="ascii")
 
     def __eq__(self, other):
         assert type(self) == type(other)
