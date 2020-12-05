@@ -138,5 +138,14 @@ class TevSwapModeTable(UnknownData):
     size = 0x4
 
 
+class TevSwapMode(UnknownData):
+    size = 0x4
+
+
 class TexMatrix(UnknownData):
     size = 0x24
+
+
+class FontNumber(UnknownData):
+    size = 0x2
+

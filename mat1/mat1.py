@@ -189,46 +189,71 @@ class MaterialInitData(object):
         texcount = 0
         
         textureIndices = read_index_array(f, initdatastart + 0x38, 2, 8)
-        
-        for i in range(8):
-            if read_int16_at(f, initdatastart + 0x38 + i*2) != -1: # Up to 0x48
-                texcount += 1 
-        initdata.texture_indices = textureIndices
+        initdata.texture_indices = []
 
-        initdata.font_index = read_int16_at(f, initdatastart + 0x48)
+        for i in range(8):
+            index = read_int16_at(f, initdatastart + 0x38 + i*2)
+            if index != -1: # Up to 0x48
+                texcount += 1
+                initdata.texture_indices.append(read_int16_at(f, offsets["UsArray4_TextureIndices"] + index*2))
+            else:
+                initdata.texture_indices.append(None)
+
+        font_index = read_int16_at(f, initdatastart + 0x48)
+
+        initdata.font = None if font_index != -1 else FontNumber.from_array(f, offsets["UsArray5"], font_index)
         
         tevkcolor_indices = read_index_array(f, initdatastart + 0x4A, 2, 4)
-        #for offset in (0x4A, 0x4C, 0x4E, 0x50):
-        #    tevkcolor_indices.append(read_int16_at(f, initdatastart + offset))
-        
-        TevKColorSels_indices = read_index_array(f, initdatastart + 0x52, 1, 16)
-        
-        TevKAlphaSels_indices = read_index_array(f, initdatastart + 0x62, 1, 16)
-        
+        initdata.tevkcolors = []
+        for index in tevkcolor_indices:
+            tevkcolor = None if index == -1 else TevKColor.from_array(f, offsets["GXColor2_TevKColors"], index)
+
+        TevKColorSels = read_index_array(f, initdatastart + 0x52, 1, 16)
+        initdata.tevkcolor_selects = TevKColorSels
+
+        TevKAlphaSels = read_index_array(f, initdatastart + 0x62, 1, 16)
+        initdata.tevkalpha_selects = TevKAlphaSels
+
         tevOrderIndices = read_index_array(f, initdatastart + 0x72, 2, 16)
-        #for i in range(16):
-        #    tevOrderIndex = read_int16_at(f, initdatastart + 0x72 + i*2) # (Up to 0x92)
-        #    tevOrderIndices.append(tevOrderIndex) 
-        
+        initdata.tevorders = []
+        for index in tevOrderIndices:
+            tevorder = None if index == -1 else TevOrder.from_array(f, offsets["TevOrderInfo"], index)
+            initdata.tevorders.append(tevorder)
+
         tevcolor_indices = read_index_array(f, initdatastart + 0x92, 2, 4)
-        #for i in range(4):
-        #    tevcolor_indices.append(read_int16_at(f, initdatastart + 0x92+i*2)) # up to excluding 0x9A
+        initdata.tevcolors = []
+        for index in tevcolor_indices:
+            tevcolor = None if index == -1 else TevColor.from_array(f, offsets["GXColorS10_TevColor"], index)
+            initdata.tevcolors.append(tevcolor)
         
         tevstageIndices = read_index_array(f, initdatastart + 0x9A, 2, 16)
-        #for i in range(16):
-        #    tevstageindex = read_int16_at(f, initdatastart + 0x9a + i*2) #up to 0xba
+        initdata.tevstages = []
+        for index in tevstageIndices:
+            tevstage = None if index == -1 else TevStage.from_array(f, offsets["TevStageInfo2"], index)
+            initdata.tevstages.append(tevstage)
+
         tevstageSwapModes = read_index_array(f, initdatastart + 0xBA, 2, 16)
-        
-        # 4 tevswapmodes starting at 0xDA (2 byte index) 
+        initdata.tevstage_swapmodes = []
+        for index in tevstageSwapModes:
+            swapmode = None if index == -1 else TevSwapMode.from_array(f, offsets["TevSwapModeInfo"], index)
+            initdata.tevstage_swapmodes.append(swapmode)
+
+
+        # 4 tevswapmode tables starting at 0xDA (2 byte index)
         tevswapmodeTableIndices = read_index_array(f, initdatastart + 0xDA, 2, 4)
+        initdata.tev_swapmode_tables = []
+        for index in tevswapmodeTableIndices:
+            swapmode_table = None if index == -1 else TevSwapModeTable.from_array(f, offsets["TevSwapModeTableInfo"], index)
+            initdata.tev_swapmode_tables.append(swapmode_table)
+
+
         alphacompIndex = read_int16_at(f, initdatastart + 0xE2)
-        blendIndex = read_int16_at(f, initdatastart + 0xE4) 
-        
+        initdata.alphacomp = AlphaCompare.from_array(f, offsets["AlphaCompInfo"], alphacompIndex)
+        blendIndex = read_int16_at(f, initdatastart + 0xE4)
+        initdata.blend = Blend.from_array(f, offsets["BlendInfo"], blendIndex)
+
         # 2 byte padding
-
-
-
-        return initdata 
+        return initdata
         
         
 class MAT1(object):
