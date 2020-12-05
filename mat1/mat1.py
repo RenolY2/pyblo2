@@ -167,10 +167,22 @@ class MaterialInitData(object):
 
 
         # 8 texcoords starting at 0x14 (2 byte index)
-        texCoordIncides = read_index_array(f, initdatastart + 0x14, 2, 8)
-        
+        texCoordIndices = read_index_array(f, initdatastart + 0x14, 2, 8)
+        initdata.tex_coord_generators = []
+        for index in texCoordIndices:
+            if index == -1:
+                initdata.tex_coord_generators.append(None)
+            else:
+                texcoord = TexCoordInfo.from_array(f, offsets["TexCoordInfo"], index)
+                initdata.tex_coord_generators.append(texcoord)
+
         # 8 tex matrices starting at 0x24 (2 byte index) 
         texMatrixIndices = read_index_array(f, initdatastart + 0x24, 2, 8)
+        initdata.tex_matrices = []
+        for index in texMatrixIndices:
+            texmatrix = None if index == -1 else TexMatrix.from_array(f, offsets["TexMatrixInfo"], index)
+            initdata.tex_matrices.append(texmatrix)
+
         # 0x34-0x37 padding
         
         # Textures?
@@ -181,8 +193,9 @@ class MaterialInitData(object):
         for i in range(8):
             if read_int16_at(f, initdatastart + 0x38 + i*2) != -1: # Up to 0x48
                 texcount += 1 
-                
-        fontIndex = read_int16_at(f, initdatastart + 0x48) 
+        initdata.texture_indices = textureIndices
+
+        initdata.font_index = read_int16_at(f, initdatastart + 0x48)
         
         tevkcolor_indices = read_index_array(f, initdatastart + 0x4A, 2, 4)
         #for offset in (0x4A, 0x4C, 0x4E, 0x50):
@@ -243,7 +256,7 @@ class MAT1(object):
         offsets = {}
         for datatype in ("MaterialInitData", "MaterialIndexRemapTable", "MaterialNames", "IndirectInitData", "GXCullMode", "MaterialColor",
                         "UcArray2_ColorChannelCount", "ColorChannelInfo", "UcArray3_TexGenCount", "TexCoordInfo", "TexMatrixInfo", "UsArray4_TextureIndices",
-                        "UsArray5", "TevOrderInfo", "GXColorS10", "GXColor2_TevKColors", "UCArray6_Tevstagenums", "TevStageInfo2", 
+                        "UsArray5", "TevOrderInfo", "GXColorS10_TevColor", "GXColor2_TevKColors", "UCArray6_Tevstagenums", "TevStageInfo2",
                         "TevSwapModeInfo", "TevSwapModeTableInfo", "AlphaCompInfo", "BlendInfo", "UcArray7_Dither"):
             
             offsets[datatype] = start + read_uint32(f)
