@@ -114,7 +114,7 @@ def write_index_array(f, array, offset, size, count):
 
 class MaterialInitData(object):
     def __init__(self):
-        pass
+        self.name = ""
         
     @classmethod
     def from_array(cls, f, start, i, offsets):
@@ -192,19 +192,19 @@ class MaterialInitData(object):
         texcount = 0
         
         textureIndices = read_index_array(f, initdatastart + 0x38, 2, 8)
-        initdata.texture_indices = []
+        initdata.textures = []
 
         for i in range(8):
             index = read_int16_at(f, initdatastart + 0x38 + i*2)
             if index != -1: # Up to 0x48
                 texcount += 1
-                initdata.texture_indices.append(read_int16_at(f, offsets["UsArray4_TextureIndices"] + index*2))
+                initdata.textures.append(read_int16_at(f, offsets["UsArray4_TextureIndices"] + index*2))
             else:
-                initdata.texture_indices.append(None)
+                initdata.textures.append(None)
 
         font_index = read_int16_at(f, initdatastart + 0x48)
 
-        initdata.font = None if font_index != -1 else FontNumber.from_array(f, offsets["UsArray5"], font_index)
+        initdata.font = None if font_index == -1 else FontNumber.from_array(f, offsets["UsArray5"], font_index)
         
         tevkcolor_indices = read_index_array(f, initdatastart + 0x4A, 2, 4)
         initdata.tevkcolors = []
@@ -277,11 +277,13 @@ class MaterialInitData(object):
 
         return result
 
+
+    
         
 class MAT1(object):
     def __init__(self):
         self.name = "MAT1"
-        self.material_names = StringTable()
+        #self.material_names = StringTable()
         self.materials = []
         
     @classmethod
@@ -314,7 +316,7 @@ class MAT1(object):
         assert offsets["IndirectInitData"] == 0
 
         f.seek(offsets["MaterialNames"])
-        mat1.material_names = StringTable.from_file(f)
+        material_names = StringTable.from_file(f)
         
         for i in range(material_count):
             f.seek(offsets["MaterialIndexRemapTable"] + i*2)
@@ -322,14 +324,54 @@ class MAT1(object):
             
             f.seek(offsets["MaterialInitData"])
             materialinitdata = MaterialInitData.from_array(f, offsets["MaterialInitData"], initdataindex, offsets)
+            materialinitdata.name = material_names.strings[i]
             mat1.materials.append(materialinitdata)
         f.seek(start+sectionsize)
         return mat1
 
     def serialize(self):
         result = {"name": "MAT1"}
-        result["MaterialNames"] = self.material_names.serialize()
+        #result["MaterialNames"] = self.material_names.serialize()
         result["Materials"] = [mat.serialize() for mat in self.materials]
 
         return result
 
+    def postprocess_serialize(self, textures):
+        result = self.serialize()
+        if textures is not None:
+            for material in result["Materials"]:
+                for i in range(len(material["textures"])):
+                    val = material["textures"][i]
+                    if val is not None:
+                        print(val)
+                        if val < len(textures.references):
+                            material["textures"][i] = textures.references[val]
+
+        return result
+
+    @classmethod
+    def deserialize(cls, obj):
+        assert obj["name"] == "MAT1"
+
+        mat1 = cls()
+        for material in obj["Materials"]:
+            mat1.materials.append(MaterialInitData.deserialize(material))
+
+        return mat1
+
+    @classmethod
+    def preprocess_deserialize(cls, obj, textures):
+        if textures is not None:
+            for material in obj["Materials"]:
+                for i in range(len(material["textures"])):
+                    val = material["textures"][i]
+                    if isinstance(val, str):
+                        if val in textures.references:
+                            pos = textures.references.index(val)
+                        else:
+                            textures.references.append(val)
+                            pos = len(textures.references)-1
+                            assert textures.references[pos] == val
+                        material["textures"][i] = pos
+
+        return cls.deserialize(obj)

@@ -49,7 +49,7 @@ class Node(object):
                 node.materials = mat1#Item.from_file(f)
                 node.children.append(node.materials)
                 print(len(mat1.materials), "materials")
-                print(mat1.material_names.strings)
+                #print(mat1.material_names.strings)
             
             elif next == b"PAN2":
                 node.children.append(Pane.from_file(f))
@@ -87,7 +87,10 @@ class Node(object):
     def serialize(self):
         result = []
         for child in self.children:
-            result.append(child.serialize())
+            if isinstance(child, MAT1):
+                result.append(child.postprocess_serialize(self.textures))
+            else:
+                result.append(child.serialize())
         
         return result 
     
@@ -110,7 +113,7 @@ class Node(object):
             elif item["type"] == "PIC2":
                 bloitem = Picture.deserialize(item)
             elif item["type"] == "MAT1":
-                bloitem = Item.deserialize(item)
+                bloitem = MAT1.deserialize(item)
             else:
                 raise RuntimeError("Unknown item {0}".format(item["type"]))
             node.children.append(bloitem)
