@@ -83,6 +83,33 @@ class StringTable(object):
     def serialize(self):
         return self.strings
 
+    @classmethod
+    def deserialize(cls, obj):
+        stringtable = cls()
+        stringtable.strings = obj
+
+        return stringtable
+
+
+def get_index_or_add(array, value):
+    if value in array:
+        return array.index(value)
+    else:
+        array.append(value)
+        return len(array)-1
+
+
+def deserialize_array(array, func):
+    result = []
+    for item in array:
+        if item is None:
+            result.append(item)
+        else:
+            result.append(func(item))
+
+    return result
+
+
 def read_index_array(f, offset, size, count):
     values = []
     read_at = None
@@ -277,8 +304,36 @@ class MaterialInitData(object):
 
         return result
 
+    @classmethod
+    def deserialize(cls, obj):
+        matinitdata = cls()
+        matinitdata.name = obj["name"]
+        matinitdata.cullmode = CullModeSetting.deserialize(obj["cullmode"])
+        print(matinitdata.cullmode, matinitdata.cullmode.serialize())
+        matinitdata.color_channel_count = obj["color_channel_count"]
+        matinitdata.tex_gen_count = obj["tex_gen_count"]
+        matinitdata.tev_stage_count = obj["tev_stage_count"]
+        matinitdata.dither = obj["dither"]
+        matinitdata.unk = obj["unk"]
+        matinitdata.matcolors = deserialize_array(obj["matcolors"], Color.deserialize)
+        matinitdata.color_channels = deserialize_array(obj["color_channels"], ChannelControl.deserialize)
+        matinitdata.tex_coord_generators = deserialize_array(obj["tex_coord_generators"], TexCoordInfo.deserialize)
+        matinitdata.tex_matrices = deserialize_array(obj["tex_matrices"], TexMatrix.deserialize)
+        matinitdata.textures = obj["textures"]
 
-    
+        matinitdata.font = obj["font"]
+        matinitdata.tevkcolors = deserialize_array(obj["tevkcolors"], TevKColor.deserialize)
+        matinitdata.tevkcolor_selects = obj["tevkcolor_selects"]
+        matinitdata.tevkalpha_selects = obj["tevkalpha_selects"]
+        matinitdata.tevorders = deserialize_array(obj["tevorders"], TevOrder.deserialize)
+        matinitdata.tevcolors = deserialize_array(obj["tevcolors"], TevColor.deserialize)
+        matinitdata.tevstages = deserialize_array(obj["tevstages"], TevStage.deserialize)
+        matinitdata.tevstage_swapmodes = deserialize_array(obj["tevstage_swapmodes"], TevSwapMode.deserialize)
+        matinitdata.tev_swapmode_tables = deserialize_array(obj["tev_swapmode_tables"], TevSwapModeTable.deserialize)
+        matinitdata.alphacomp = AlphaCompare.deserialize(obj["alphacomp"])
+        matinitdata.blend = Blend.deserialize(obj["blend"])
+        return matinitdata
+
         
 class MAT1(object):
     def __init__(self):
@@ -330,12 +385,13 @@ class MAT1(object):
         return mat1
 
     def serialize(self):
-        result = {"name": "MAT1"}
+        result = {"type": "MAT1"}
         #result["MaterialNames"] = self.material_names.serialize()
         result["Materials"] = [mat.serialize() for mat in self.materials]
 
         return result
 
+    # Turn indices into texture names
     def postprocess_serialize(self, textures):
         result = self.serialize()
         if textures is not None:
@@ -351,14 +407,15 @@ class MAT1(object):
 
     @classmethod
     def deserialize(cls, obj):
-        assert obj["name"] == "MAT1"
+        assert obj["type"] == "MAT1"
 
         mat1 = cls()
         for material in obj["Materials"]:
             mat1.materials.append(MaterialInitData.deserialize(material))
 
         return mat1
-
+    
+    # Resolve texture names into indices
     @classmethod
     def preprocess_deserialize(cls, obj, textures):
         if textures is not None:

@@ -799,8 +799,8 @@ if __name__ == "__main__":
     with open(outputfile, "w") as f:
         json.dump(result, f, indent=4)
 
-    """with open(inputfile+"_2.blo", "wb") as f:
-        blo.write(f)
+    #with open(inputfile+"_2.blo", "wb") as f:
+    #    blo.write(f)
 
     with open(outputfile, "r") as f:
         data = json.load(f)
@@ -809,8 +809,8 @@ if __name__ == "__main__":
     with open(outputfile+"_2.json", "w") as f:
         json.dump(blo.serialize(), f, indent=4)
 
-    with open(inputfile+"_3.blo", "wb") as f:
-        blo.write(f)"""
+    ##with open(inputfile+"_3.blo", "wb") as f:
+    ##    blo.write(f)"""
 
     """with open(inputfile, "rb") as f:
         f.seek(0x20)

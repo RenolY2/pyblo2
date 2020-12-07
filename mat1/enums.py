@@ -3,7 +3,7 @@ from binary_io import *
 
 
 class GXEnum(object):
-    enum = IntEnum("PlaceHolder", ["NONE"])
+    enum = IntEnum("PlaceHolder", ["NONE"], start=0)
 
     def __init__(self):
         self.value = self.enum(0)
@@ -25,6 +25,16 @@ class GXEnum(object):
 
     def serialize(self):
         return str(self.value)
+
+    @classmethod
+    def deserialize(cls, obj):
+        for member in cls.enum:
+            if str(member) == obj:
+                setting = cls()
+                setting.value = member
+                return setting
+
+        raise RuntimeError("Not a member of this enum: {0}".format(obj))
 
     def __eq__(self, other):
         return type(self) == type(other) and self.value == other.value
