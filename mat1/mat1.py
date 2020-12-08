@@ -19,8 +19,6 @@ class StringTable(object):
         
         offsets = []
         
-        print("string count", string_count)
-        
         for i in range(string_count):
             hash = read_uint16(f)
             string_offset = read_uint16(f)
@@ -92,7 +90,9 @@ class StringTable(object):
 
 
 def get_index_or_add(array, value):
-    if value in array:
+    if value is None:
+        return -1
+    elif value in array:
         return array.index(value)
     else:
         array.append(value)
@@ -151,15 +151,15 @@ class MaterialInitData(object):
         f.seek(start + i * 0xE8) # 0xE8 is size of Material Init Data entry
         initdatastart = f.tell()
         #f.seek(start)
-        
+        initdata.flag = read_int8_at(f, initdatastart + 0x0)
         cullmodeIndex = read_int8_at(f, initdatastart + 0x1)
         initdata.cullmode = CullModeSetting.from_array(f, offsets["GXCullMode"], cullmodeIndex)
 
         colorChannelNumIndex = read_int8_at(f, initdatastart + 0x2)
-        initdata.color_channel_count = read_int8_at(f, offsets["UcArray3_TexGenCount"]+colorChannelNumIndex)
+        initdata.color_channel_count = read_int8_at(f, offsets["ColorChannelInfo"]+colorChannelNumIndex)
 
         texGenNumIndex = read_int8_at(f, initdatastart + 0x3)
-        initdata.tex_gen_count = read_int8_at(f, offsets["UcArray2_ColorChannelCount"]+texGenNumIndex)
+        initdata.tex_gen_count = read_int8_at(f, offsets["TexCoordInfo"]+texGenNumIndex)
 
         tevStageNumIndex = read_int8_at(f, initdatastart + 0x4)
         initdata.tev_stage_count = read_int8_at(f, offsets["UCArray6_Tevstagenums"] + tevStageNumIndex)
@@ -237,6 +237,7 @@ class MaterialInitData(object):
         initdata.tevkcolors = []
         for index in tevkcolor_indices:
             tevkcolor = None if index == -1 else TevKColor.from_array(f, offsets["GXColor2_TevKColors"], index)
+            initdata.tevkcolors.append(tevkcolor)
 
         TevKColorSels = read_index_array(f, initdatastart + 0x52, 1, 16)
         initdata.tevkcolor_selects = TevKColorSels
@@ -285,6 +286,72 @@ class MaterialInitData(object):
         # 2 byte padding
         return initdata
 
+    def write_and_fill_data(self, f, dataarrays):
+        start = f.tell()
+        write_int8(f, self.flag)  # 0x00
+        write_int8(f, get_index_or_add(dataarrays["GXCullMode"], self.cullmode))  # 0x01
+        write_int8(f, get_index_or_add(dataarrays["UcArray2_ColorChannelCount"], self.color_channel_count))  # 0x02
+        write_int8(f, get_index_or_add(dataarrays["UcArray3_TexGenCount"], self.tex_gen_count))  # 0x03
+        write_int8(f, get_index_or_add(dataarrays["UCArray6_Tevstagenums"], self.tev_stage_count))  # 0x04
+        write_int8(f, get_index_or_add(dataarrays["UcArray7_Dither"], self.dither))  # 0x05
+        write_int8(f, self.unk) # 0x06
+        write_uint8(f, 0xFF)   # 0x07 padding
+        assert f.tell() - start == 0x8
+
+        for color in self.matcolors:  # 0x8
+            write_int16(f, get_index_or_add(dataarrays["MaterialColor"], color))
+
+        for color_channel in self.color_channels:  # 0xC
+            print("adding value", color_channel)
+            print(dataarrays["ColorChannelInfo"])
+            write_int16(f, get_index_or_add(dataarrays["ColorChannelInfo"], color_channel))
+        assert f.tell() - start == 0x14
+        for texcoord in self.tex_coord_generators:  # 0x14
+            write_int16(f, get_index_or_add(dataarrays["TexCoordInfo"], texcoord))
+        assert f.tell() - start == 0x24
+
+        for tex_matrix in self.tex_matrices:  # 0x24
+            write_int16(f, get_index_or_add(dataarrays["TexMatrixInfo"], tex_matrix))
+
+        f.write(b"\xFF\xFF\xFF\xFF")  # 0x34 - 0x37 padding
+
+        assert f.tell() - start == 0x38
+        for tex_index in self.textures:  # 0x38
+            write_int16(f, get_index_or_add(dataarrays["UsArray4_TextureIndices"], tex_index))
+
+        write_int16(f, get_index_or_add(dataarrays["UsArray5"], self.font))  # 0x48
+        assert f.tell() - start == 0x4A
+        for tevkcolor in self.tevkcolors: # 0x4A
+            write_int16(f, get_index_or_add(dataarrays["GXColor2_TevKColors"], tevkcolor))
+
+        for color_sel in self.tevkcolor_selects:  # 0x52
+            write_int8(f, color_sel)
+
+        for alpha_sel in self.tevkalpha_selects:  # 0x62
+            write_int8(f, alpha_sel)
+
+        for tev_order in self.tevorders:  # 0x72
+            write_int16(f, get_index_or_add(dataarrays["TevOrderInfo"], tev_order))
+
+        for tev_color in self.tevcolors:  # 0x92
+            write_int16(f, get_index_or_add(dataarrays["GXColorS10_TevColor"], tev_color))
+
+        for tev_stage in self.tevstages:  # 0x9A
+            write_int16(f, get_index_or_add(dataarrays["TevStageInfo2"], tev_stage))
+
+        for tev_stage_swapmode in self.tevstage_swapmodes:  # 0xBA
+            write_int16(f, get_index_or_add(dataarrays["TevSwapModeInfo"], tev_stage_swapmode))
+
+        for tev_stage_swapmode_table in self.tev_swapmode_tables:  # 0xDA
+            write_int16(f, get_index_or_add(dataarrays["TevSwapModeTableInfo"], tev_stage_swapmode_table))
+
+        write_int16(f, get_index_or_add(dataarrays["AlphaCompInfo"], self.alphacomp))
+        write_int16(f, get_index_or_add(dataarrays["BlendInfo"], self.blend))
+        f.write(b"\xFF\xFF") # padding
+        print(hex(f.tell() - start))
+        assert f.tell() - start == 0xE8
+
+
     def serialize(self):
         result = {}
         for k, v in self.__dict__.items():
@@ -299,7 +366,6 @@ class MaterialInitData(object):
                         newlist.append(val)
                 result[k] = newlist
             else:
-                print(v)
                 result[k] = v
 
         return result
@@ -308,8 +374,8 @@ class MaterialInitData(object):
     def deserialize(cls, obj):
         matinitdata = cls()
         matinitdata.name = obj["name"]
+        matinitdata.flag = obj["flag"]
         matinitdata.cullmode = CullModeSetting.deserialize(obj["cullmode"])
-        print(matinitdata.cullmode, matinitdata.cullmode.serialize())
         matinitdata.color_channel_count = obj["color_channel_count"]
         matinitdata.tex_gen_count = obj["tex_gen_count"]
         matinitdata.tev_stage_count = obj["tev_stage_count"]
@@ -320,6 +386,8 @@ class MaterialInitData(object):
         matinitdata.tex_coord_generators = deserialize_array(obj["tex_coord_generators"], TexCoordInfo.deserialize)
         matinitdata.tex_matrices = deserialize_array(obj["tex_matrices"], TexMatrix.deserialize)
         matinitdata.textures = obj["textures"]
+        for tex in matinitdata.textures:
+            assert not isinstance(tex, str)
 
         matinitdata.font = obj["font"]
         matinitdata.tevkcolors = deserialize_array(obj["tevkcolors"], TevKColor.deserialize)
@@ -384,6 +452,74 @@ class MAT1(object):
         f.seek(start+sectionsize)
         return mat1
 
+    def write(self, f):
+        start = f.tell()
+        f.write(b"MAT1")
+        f.write(b"FOOB")  # Fill in later
+        write_int16(f, len(self.materials))
+        f.write(b"\xFF\xFF")  # padding
+
+        offsets = {}
+        dataarrays = {}
+
+        sections = ("MaterialInitData", "MaterialIndexRemapTable", "MaterialNames", "IndirectInitData", "GXCullMode",
+            "MaterialColor",
+            "UcArray2_ColorChannelCount", "ColorChannelInfo", "UcArray3_TexGenCount", "TexCoordInfo", "TexMatrixInfo",
+            "UsArray4_TextureIndices",
+            "UsArray5", "TevOrderInfo", "GXColorS10_TevColor", "GXColor2_TevKColors", "UCArray6_Tevstagenums",
+            "TevStageInfo2",
+            "TevSwapModeInfo", "TevSwapModeTableInfo", "AlphaCompInfo", "BlendInfo", "UcArray7_Dither")
+        offsets_start = f.tell()
+        for datatype in sections:
+            offsets[datatype] = None
+            dataarrays[datatype] = []
+            f.write(b"FOOB")
+
+        offsets["MaterialInitData"] = f.tell()-start
+        for material in self.materials:
+            material.write_and_fill_data(f, dataarrays)
+
+        offsets["MaterialIndexRemapTable"] = f.tell()-start
+        for i, material in enumerate(self.materials):
+            write_int16(f, i)
+        write_pad(f, 4)
+        offsets["MaterialNames"] = f.tell()-start
+        material_names = StringTable()
+
+        for material in self.materials:
+            material_names.strings.append(material.name)
+        material_names.write(f)
+
+        write_pad(f, 4)
+        offsets["IndirectInitData"] = 0  # TODO: Implement Indirect Data
+
+        for datatype in sections[4:]:
+            offsets[datatype] = f.tell()-start
+            if datatype in ("UcArray2_ColorChannelCount", "UcArray3_TexGenCount", "UCArray6_Tevstagenums", "UcArray7_Dither"):
+                for data in dataarrays[datatype]:
+                    write_uint8(f, data)
+            elif datatype in ("UsArray4_TextureIndices", ):
+                for data in dataarrays[datatype]:
+                    print(data,type(data))
+                    write_uint16(f, data)
+            else:
+                for data in dataarrays[datatype]:
+                    data.write(f)
+
+            write_pad(f, 4)
+
+        total = f.tell()
+
+        f.seek(offsets_start)
+        for datatype in sections:
+            offset = offsets[datatype]
+            write_uint32(f, offset)
+
+        f.seek(start+4)
+        write_uint32(f, total-start)  # section size
+
+        f.seek(total)
+
     def serialize(self):
         result = {"type": "MAT1"}
         #result["MaterialNames"] = self.material_names.serialize()
@@ -399,7 +535,6 @@ class MAT1(object):
                 for i in range(len(material["textures"])):
                     val = material["textures"][i]
                     if val is not None:
-                        print(val)
                         if val < len(textures.references):
                             material["textures"][i] = textures.references[val]
 
@@ -431,4 +566,12 @@ class MAT1(object):
                             assert textures.references[pos] == val
                         material["textures"][i] = pos
 
-        return cls.deserialize(obj)
+            for material in obj["Materials"]:
+                for i in range(len(material["textures"])):
+                    val = material["textures"][i]
+                    assert not isinstance(val, str)
+        deserialized = cls.deserialize(obj)
+        for material in deserialized.materials:
+            for tex in material.textures:
+                assert not isinstance(tex, str)
+        return deserialized

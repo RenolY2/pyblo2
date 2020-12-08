@@ -54,7 +54,6 @@ class Node(object):
             elif next == b"PAN2":
                 node.children.append(Pane.from_file(f))
             elif next == b"PIC2":
-                print("hmmm", node.textures)
                 node.children.append(Picture.from_file(f))
             elif next == b"WIN2":
                 node.children.append(Window.from_file(f))
@@ -95,13 +94,16 @@ class Node(object):
         return result 
     
     @classmethod 
-    def deserialize(cls, obj):
+    def deserialize(cls, obj, textures=None):
         node = cls()
+        node.textures = textures
+
         for item in obj:
             if isinstance(item, list):
-                bloitem = Node.deserialize(item)
+                bloitem = Node.deserialize(item, node.textures)
             elif item["type"] == "TEX1":
                 bloitem = TextureNames.deserialize(item)
+                node.textures = bloitem
             elif item["type"] == "FNT1":
                 bloitem = FontNames.deserialize(item)
             elif item["type"] == "PAN2":
@@ -113,7 +115,7 @@ class Node(object):
             elif item["type"] == "PIC2":
                 bloitem = Picture.deserialize(item)
             elif item["type"] == "MAT1":
-                bloitem = MAT1.deserialize(item)
+                bloitem = MAT1.preprocess_deserialize(item, node.textures)
             else:
                 raise RuntimeError("Unknown item {0}".format(item["type"]))
             node.children.append(bloitem)
@@ -748,7 +750,6 @@ class ScreenBlo(object):
 
         self.info.write(f)
         count = self.root.write(f)
-        print(hex(count))
         f.write(b"EXT1")
         write_uint32(f, 0x8)
         write_pad(f, 0x20)
@@ -779,8 +780,26 @@ class ScreenBlo(object):
 if __name__ == "__main__":  
     import json 
     import sys
-    #inputfile = sys.argv[1]
-    inputfile = "cave_pikmin.blo"
+    inputfile = sys.argv[1]
+    
+    if inputfile.endswith(".blo"):
+        outfile = inputfile+".json"
+        with open(inputfile, "rb") as f:
+            blo = ScreenBlo.from_file(f)
+
+        with open(outfile, "w") as f:
+            json.dump(blo.serialize(), f, indent=4)
+
+    elif inputfile.endswith(".json"):
+        outfile = inputfile+".blo"
+        with open(inputfile, "r") as f:
+            blo = ScreenBlo.deserialize(json.load(f))
+
+        with open(outfile, "wb") as f:
+            blo.write(f)
+
+
+    """inputfile = "cave_pikmin.blo"
     #inputfile = "courseselect_under.blo"
     #inputfile = "anim_text.blo"
     outputfile = inputfile + ".json"
@@ -799,8 +818,8 @@ if __name__ == "__main__":
     with open(outputfile, "w") as f:
         json.dump(result, f, indent=4)
 
-    #with open(inputfile+"_2.blo", "wb") as f:
-    #    blo.write(f)
+    with open(inputfile+"_2.blo", "wb") as f:
+        blo.write(f)
 
     with open(outputfile, "r") as f:
         data = json.load(f)
@@ -809,9 +828,18 @@ if __name__ == "__main__":
     with open(outputfile+"_2.json", "w") as f:
         json.dump(blo.serialize(), f, indent=4)
 
-    ##with open(inputfile+"_3.blo", "wb") as f:
-    ##    blo.write(f)"""
+    with open(inputfile+"_3.blo", "wb") as f:
+        blo.write(f)
 
+    with open(inputfile+"_2.blo", "rb") as f:
+        newblo = ScreenBlo.from_file(f)
+
+    with open(inputfile + "_4.blo", "wb") as f:
+        newblo.write(f)
+
+    with open(inputfile + "_4.blo.json", "w") as f:
+        json.dump(newblo.serialize(), f, indent=4)
+    """
     """with open(inputfile, "rb") as f:
         f.seek(0x20)
         for i in range(0xA4):

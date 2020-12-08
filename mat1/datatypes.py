@@ -94,7 +94,6 @@ class UnknownData(object):
 
     @classmethod
     def from_array(cls, f, start, i):
-        print(start, i, cls.size)
         f.seek(start + i*cls.size)
         return cls.from_file(f)
 
@@ -113,6 +112,7 @@ class UnknownData(object):
         return unkobj
 
     def __eq__(self, other):
+        print(self, other)
         assert type(self) == type(other)
         return self.data == other.data
 
