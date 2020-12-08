@@ -781,9 +781,14 @@ if __name__ == "__main__":
     import json 
     import sys
     inputfile = sys.argv[1]
-    
+    if len(sys.argv) > 2:
+        outfile = sys.argv[2]
+    else:
+        outfile = None
+
     if inputfile.endswith(".blo"):
-        outfile = inputfile+".json"
+        if outfile is None:
+            outfile = inputfile+".json"
         with open(inputfile, "rb") as f:
             blo = ScreenBlo.from_file(f)
 
@@ -791,7 +796,8 @@ if __name__ == "__main__":
             json.dump(blo.serialize(), f, indent=4)
 
     elif inputfile.endswith(".json"):
-        outfile = inputfile+".blo"
+        if outfile is None:
+            outfile = inputfile+".blo"
         with open(inputfile, "r") as f:
             blo = ScreenBlo.deserialize(json.load(f))
 
