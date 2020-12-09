@@ -383,8 +383,8 @@ class Picture(Pane):
         picture.name = name
 
         picture.size = read_uint16(f)
+        picture.unk_index = read_uint16(f)
         picture.material = read_uint16(f)
-        picture.texture = read_uint16(f)
         
         re = f.read(2)
         assert re == b"RE"
@@ -415,8 +415,8 @@ class Picture(Pane):
         write_uint32(f, 0x80)
         super().write(f)  # Write pane
         write_uint16(f, self.size)
+        write_uint16(f, self.unk_index)
         write_uint16(f, self.material)
-        write_uint16(f, self.texture)
         f.write(b"RE")
         write_uint16(f, self.color1["unk1"])
         write_uint16(f, self.color1["unk2"])
@@ -451,8 +451,8 @@ class Picture(Pane):
         window = super(Picture, cls).deserialize(obj)
 
         window.assign_value(obj, "size")
+        window.assign_value(obj, "unk_index")
         window.assign_value(obj, "material")
-        window.assign_value(obj, "texture")
         window.assign_value(obj, "color1")
         window.assign_value(obj, "color2")
 
