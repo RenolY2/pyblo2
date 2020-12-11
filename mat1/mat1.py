@@ -144,15 +144,25 @@ class MaterialInitData(object):
         self.name = ""
         
     @classmethod
-    def from_array(cls, f, start, i, offsets):
+    def from_array(cls, f, start, i, offsets, real_i):
         initdata = cls()
+
+
+
         #start = f.tell()
         
         f.seek(start + i * 0xE8) # 0xE8 is size of Material Init Data entry
         initdatastart = f.tell()
         #f.seek(start)
+        if offsets["IndirectInitData"] != 0:
+            initdata.indirectdata = IndirectInitData.from_array(f, offsets["IndirectInitData"], real_i)
+        else:
+            initdata.indirectdata = None
+
         initdata.flag = read_int8_at(f, initdatastart + 0x0)
         cullmodeIndex = read_int8_at(f, initdatastart + 0x1)
+
+
         initdata.cullmode = CullModeSetting.from_array(f, offsets["GXCullMode"], cullmodeIndex)
 
         colorChannelNumIndex = read_int8_at(f, initdatastart + 0x2)
@@ -351,7 +361,6 @@ class MaterialInitData(object):
         print(hex(f.tell() - start))
         assert f.tell() - start == 0xE8
 
-
     def serialize(self):
         result = {}
         for k, v in self.__dict__.items():
@@ -400,6 +409,13 @@ class MaterialInitData(object):
         matinitdata.tev_swapmode_tables = deserialize_array(obj["tev_swapmode_tables"], TevSwapModeTable.deserialize)
         matinitdata.alphacomp = AlphaCompare.deserialize(obj["alphacomp"])
         matinitdata.blend = Blend.deserialize(obj["blend"])
+        if "indirectdata" not in obj:
+            matinitdata.indirectdata = None
+        elif obj["indirectdata"] is None:
+            matinitdata.indirectdata = None
+        else:
+            matinitdata.indirectdata = IndirectInitData.deserialize(obj["indirectdata"])
+
         return matinitdata
 
         
@@ -436,7 +452,7 @@ class MAT1(object):
         
         if offsets["IndirectInitData"] == start or offsets["IndirectInitData"]-offsets["MaterialNames"] < 5:
             offsets["IndirectInitData"] = 0
-        assert offsets["IndirectInitData"] == 0
+        #assert offsets["IndirectInitData"] == 0
 
         f.seek(offsets["MaterialNames"])
         material_names = StringTable.from_file(f)
@@ -446,7 +462,7 @@ class MAT1(object):
             initdataindex = read_uint16(f)
             
             f.seek(offsets["MaterialInitData"])
-            materialinitdata = MaterialInitData.from_array(f, offsets["MaterialInitData"], initdataindex, offsets)
+            materialinitdata = MaterialInitData.from_array(f, offsets["MaterialInitData"], initdataindex, offsets, i)
             materialinitdata.name = material_names.strings[i]
             mat1.materials.append(materialinitdata)
         f.seek(start+sectionsize)
@@ -474,10 +490,12 @@ class MAT1(object):
             offsets[datatype] = None
             dataarrays[datatype] = []
             f.write(b"FOOB")
-
+        has_indirectdata = False
         offsets["MaterialInitData"] = f.tell()-start
         for material in self.materials:
             material.write_and_fill_data(f, dataarrays)
+            if material.indirectdata is not None:
+                has_indirectdata = True
 
         offsets["MaterialIndexRemapTable"] = f.tell()-start
         for i, material in enumerate(self.materials):
@@ -492,6 +510,14 @@ class MAT1(object):
 
         write_pad(f, 4)
         offsets["IndirectInitData"] = 0  # TODO: Implement Indirect Data
+
+        if has_indirectdata:
+            offsets["IndirectInitData"] = f.tell()-start
+            for mat in self.materials:
+                if mat.indirectdata is None:
+                    f.write(b"\x00"*0x128)
+                else:
+                    mat.indirectdata.write(f)
 
         for datatype in sections[4:]:
             offsets[datatype] = f.tell()-start

@@ -173,3 +173,6 @@ class TexMatrix(UnknownData):
 class FontNumber(UnknownData):
     size = 0x2
 
+
+class IndirectInitData(UnknownData):
+    size = 0x128  # All indirect data
