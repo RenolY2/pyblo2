@@ -174,8 +174,8 @@ class Pane(object):
         assert unk == 0x40
 
         pane.p_unk1 = read_uint16(f) # 0xA
-        pane.p_unk2 = read_uint8(f) # 0xC
-        pane.p_unk3 = read_uint8(f) # 0xD
+        pane.p_enabled = read_uint8(f) # 0xC
+        pane.p_anchor = read_uint8(f) # 0xD
         
         re = f.read(2)
         assert re == b"RE"
@@ -207,8 +207,8 @@ class Pane(object):
 
 
         write_uint16(f, self.p_unk1)
-        write_uint8(f, self.p_unk2)
-        write_uint8(f, self.p_unk3)
+        write_uint8(f, self.p_enabled)
+        write_uint8(f, self.p_anchor)
         f.write(b"RE")
         f.write(bytes(self.p_panename, encoding="ascii"))
 
@@ -249,8 +249,8 @@ class Pane(object):
         pane = cls()
         pane.p_name = obj["p_type"]
         pane.assign_value(obj, "p_unk1")
-        pane.assign_value(obj, "p_unk2")
-        pane.assign_value(obj, "p_unk3")
+        pane.assign_value(obj, "p_enabled")
+        pane.assign_value(obj, "p_anchor")
         pane.assign_value(obj, "p_panename")
         pane.assign_value(obj, "p_size_x")
         pane.assign_value(obj, "p_size_y")
@@ -491,7 +491,7 @@ class Textbox(Pane):
         textbox.unk12 = read_uint16(f)
         stringlength = read_uint16(f)
         assert f.tell() == start+0x70
-        textbox.text = f.read(stringlength).decode("shift-jis", errors="backslashreplace")
+        textbox.text = f.read(stringlength).decode("shift_jis_2004")
         f.seek(start+size)
         return textbox
 
@@ -516,7 +516,7 @@ class Textbox(Pane):
         f.write(b"RES")
         write_uint16(f, self.unk12)
 
-        text = bytes(self.text, encoding="shift-jis")
+        text = bytes(self.text, encoding="shift_jis_2004")
         write_uint16(f, len(text))
         assert f.tell() == start + 0x70
         f.write(text)
@@ -593,7 +593,7 @@ class ResourceReference(Item):
             unk = read_uint8(f)
             length = read_uint8(f)
             assert unk == 0x2 
-            name = str(f.read(length), "shift-jis")
+            name = str(f.read(length), "shift_jis_2004")
             
             resreference.references.append(name)
             
@@ -618,7 +618,7 @@ class ResourceReference(Item):
                 offsets[ref] = f.tell()-namestart
                 write_uint8(f, 0x2)
                 write_uint8(f, len(ref))
-                f.write(bytes(ref, encoding="shift-jis"))
+                f.write(bytes(ref, encoding="shift_jis_2004"))
                 #write_pad(f, 4)
         write_pad(f, 0x20)
         curr = f.tell()
@@ -792,13 +792,13 @@ if __name__ == "__main__":
         with open(inputfile, "rb") as f:
             blo = ScreenBlo.from_file(f)
 
-        with open(outfile, "w") as f:
-            json.dump(blo.serialize(), f, indent=4)
+        with open(outfile, "w", encoding="utf-8") as f:
+            json.dump(blo.serialize(), f, indent=4, ensure_ascii=False)
 
     elif inputfile.endswith(".json"):
         if outfile is None:
             outfile = inputfile+".blo"
-        with open(inputfile, "r") as f:
+        with open(inputfile, "r", encoding="utf-8") as f:
             blo = ScreenBlo.deserialize(json.load(f))
 
         with open(outfile, "wb") as f:

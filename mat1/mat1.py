@@ -398,7 +398,7 @@ class MaterialInitData(object):
         for tex in matinitdata.textures:
             assert not isinstance(tex, str)
 
-        matinitdata.font = obj["font"]
+        matinitdata.font = FontNumber.deserialize(obj["font"])
         matinitdata.tevkcolors = deserialize_array(obj["tevkcolors"], TevKColor.deserialize)
         matinitdata.tevkcolor_selects = obj["tevkcolor_selects"]
         matinitdata.tevkalpha_selects = obj["tevkalpha_selects"]
@@ -530,6 +530,7 @@ class MAT1(object):
                     write_uint16(f, data)
             else:
                 for data in dataarrays[datatype]:
+                    print(data)
                     data.write(f)
 
             write_pad(f, 4)
