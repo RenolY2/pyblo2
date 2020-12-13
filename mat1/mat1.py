@@ -398,7 +398,10 @@ class MaterialInitData(object):
         for tex in matinitdata.textures:
             assert not isinstance(tex, str)
 
-        matinitdata.font = FontNumber.deserialize(obj["font"])
+        if obj["font"] is None:
+            matinitdata.font = None
+        else:
+            matinitdata.font = FontNumber.deserialize(obj["font"])
         matinitdata.tevkcolors = deserialize_array(obj["tevkcolors"], TevKColor.deserialize)
         matinitdata.tevkcolor_selects = obj["tevkcolor_selects"]
         matinitdata.tevkalpha_selects = obj["tevkalpha_selects"]
