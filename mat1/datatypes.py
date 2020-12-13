@@ -14,6 +14,10 @@ class Color(object):
     @classmethod
     def from_array(cls, f, start, i):
         f.seek(start + i*4)
+        return cls.from_file(f)
+
+    @classmethod
+    def from_file(cls, f):
         r, g, b, a = read_uint8(f), read_uint8(f), read_uint8(f), read_uint8(f)
 
         return cls(r, g, b, a)

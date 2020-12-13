@@ -1,6 +1,7 @@
 from binary_io import *
 from binascii import hexlify, unhexlify
 from mat1.mat1 import MAT1
+from mat1.datatypes import Color
 
 
 class Node(object): 
@@ -483,8 +484,8 @@ class Textbox(Pane):
         textbox.unk6 = read_uint16(f)
         textbox.unk7byte = read_uint8(f)
         textbox.unk8byte = read_uint8(f)
-        textbox.unk9 = read_uint32(f)
-        textbox.unk10 = read_uint32(f)
+        textbox.color_top = Color.from_file(f)
+        textbox.color_bottom = Color.from_file(f)
         textbox.unk11 = read_uint8(f)
         res = f.read(3)
         assert res == b"RES"
@@ -510,8 +511,8 @@ class Textbox(Pane):
         write_uint16(f, self.unk6)
         write_uint8(f, self.unk7byte)
         write_uint8(f, self.unk8byte)
-        write_uint32(f, self.unk9)
-        write_uint32(f, self.unk10)
+        self.color_top.write(f)  #write_uint32(f, self.unk9)
+        self.color_bottom.write(f)  #write_uint32(f, self.unk10)
         write_uint8(f, self.unk11)
         f.write(b"RES")
         write_uint16(f, self.text_cutoff)
@@ -530,6 +531,8 @@ class Textbox(Pane):
     def serialize(self):
         result = super().serialize()
         result["type"] = "TBX2"
+        result["color_top"] = self.color_top.serialize()
+        result["color_bottom"] = self.color_bottom.serialize()
 
         return result
 
@@ -547,8 +550,9 @@ class Textbox(Pane):
         window.assign_value(obj, "unk6")
         window.assign_value(obj, "unk7byte")
         window.assign_value(obj, "unk8byte")
-        window.assign_value(obj, "unk9")
-        window.assign_value(obj, "unk10")
+        #window.assign_value(obj, "unk9")
+        window.color_top = Color.deserialize(obj["color_top"])  #window.assign_value(obj, "unk10")
+        window.color_bottom = Color.deserialize(obj["color_bottom"])
         window.assign_value(obj, "unk11")
         window.assign_value(obj, "text_cutoff")
 
