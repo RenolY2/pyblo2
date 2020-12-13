@@ -74,8 +74,6 @@ class J3DAttentuationFunction(GXEnum):
     enum = IntEnum("AttentuationFunction", ["NONE", "SPEC", "NONE_2", "SPOT"], start=0)
 
 
-
-
 if __name__ == "__main__":
     from io import BytesIO
 
