@@ -5,8 +5,8 @@ from binary_io import *
 class GXEnum(object):
     enum = IntEnum("PlaceHolder", ["NONE"], start=0)
 
-    def __init__(self):
-        self.value = self.enum(0)
+    def __init__(self, value=0):
+        self.value = self.enum(value)
 
     @classmethod
     def from_array(cls, f, start, i):
@@ -40,7 +40,24 @@ class GXEnum(object):
         return type(self) == type(other) and self.value == other.value
 
 
-class CullModeSetting(GXEnum):
+class GXEnum_4_byte(GXEnum):
+    @classmethod
+    def from_array(cls, f, start, i):
+        f.seek(start + i*4)
+        return cls.from_file(f)
+
+    @classmethod
+    def from_file(cls, f):
+        value = read_uint32(f)
+        cullmode = cls()
+        cullmode.value = cls.enum(value)
+        return cullmode
+
+    def write(self, f):
+        write_uint32(f, self.value)
+
+
+class CullModeSetting(GXEnum_4_byte):
     enum = IntEnum("CullMode", ["NONE", "FRONT", "BACK", "ALL"], start=0)
 
 

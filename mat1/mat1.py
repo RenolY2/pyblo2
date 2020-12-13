@@ -166,7 +166,7 @@ class MaterialInitData(object):
         initdata.cullmode = CullModeSetting.from_array(f, offsets["GXCullMode"], cullmodeIndex)
 
         colorChannelNumIndex = read_int8_at(f, initdatastart + 0x2)
-        initdata.color_channel_count = read_int8_at(f, offsets["ColorChannelInfo"]+colorChannelNumIndex)
+        initdata.color_channel_count = read_int8_at(f, offsets["UcArray2_ColorChannelCount"]+colorChannelNumIndex)
 
         texGenNumIndex = read_int8_at(f, initdatastart + 0x3)
         initdata.tex_gen_count = read_int8_at(f, offsets["TexCoordInfo"]+texGenNumIndex)
@@ -179,7 +179,8 @@ class MaterialInitData(object):
         unk = read_int8_at(f, initdatastart + 0x6)
         initdata.unk = unk
         
-        # 0x7 padding 
+        # 0x7 padding
+        assert read_int8_at(f, initdatastart + 0x7) == 0x00
         
         # 2 Mat Colors starting at 0x8 (2 byte index)
         matColorIndices = read_index_array(f, initdatastart + 0x8, 2, 2)
@@ -199,10 +200,11 @@ class MaterialInitData(object):
             if index == -1:
                 initdata.color_channels.append(None)
             else:
-                if i < 2 or initdata.color_channel_count != 0:
-                    initdata.color_channels.append(ChannelControl.from_array(f, offsets["ColorChannelInfo"], index))
-                else:
-                    initdata.color_channels.append(None)
+                initdata.color_channels.append(ChannelControl.from_array(f, offsets["ColorChannelInfo"], index))
+                #if i < 2 or initdata.color_channel_count != 0:
+                #    initdata.color_channels.append(ChannelControl.from_array(f, offsets["ColorChannelInfo"], index))
+                #else:
+                #    initdata.color_channels.append(None)
 
 
 
@@ -294,6 +296,7 @@ class MaterialInitData(object):
         initdata.blend = Blend.from_array(f, offsets["BlendInfo"], blendIndex)
 
         # 2 byte padding
+        assert read_int16_at(f, initdatastart + 0xE6) == 0x0000
         return initdata
 
     def write_and_fill_data(self, f, dataarrays):
@@ -305,7 +308,7 @@ class MaterialInitData(object):
         write_int8(f, get_index_or_add(dataarrays["UCArray6_Tevstagenums"], self.tev_stage_count))  # 0x04
         write_int8(f, get_index_or_add(dataarrays["UcArray7_Dither"], self.dither))  # 0x05
         write_int8(f, self.unk) # 0x06
-        write_uint8(f, 0xFF)   # 0x07 padding
+        write_uint8(f, 0x00)   # 0x07 padding
         assert f.tell() - start == 0x8
 
         for color in self.matcolors:  # 0x8
@@ -357,7 +360,7 @@ class MaterialInitData(object):
 
         write_int16(f, get_index_or_add(dataarrays["AlphaCompInfo"], self.alphacomp))
         write_int16(f, get_index_or_add(dataarrays["BlendInfo"], self.blend))
-        f.write(b"\xFF\xFF") # padding
+        f.write(b"\x00\x00")  # padding
         print(hex(f.tell() - start))
         assert f.tell() - start == 0xE8
 
@@ -481,6 +484,7 @@ class MAT1(object):
         offsets = {}
         dataarrays = {}
 
+
         sections = ("MaterialInitData", "MaterialIndexRemapTable", "MaterialNames", "IndirectInitData", "GXCullMode",
             "MaterialColor",
             "UcArray2_ColorChannelCount", "ColorChannelInfo", "UcArray3_TexGenCount", "TexCoordInfo", "TexMatrixInfo",
@@ -493,12 +497,21 @@ class MAT1(object):
             offsets[datatype] = None
             dataarrays[datatype] = []
             f.write(b"FOOB")
+
+        dataarrays["GXCullMode"] = [CullModeSetting(2),
+                                    CullModeSetting(1),
+                                    CullModeSetting(0)]
+
         has_indirectdata = False
         offsets["MaterialInitData"] = f.tell()-start
         for material in self.materials:
             material.write_and_fill_data(f, dataarrays)
             if material.indirectdata is not None:
                 has_indirectdata = True
+
+        dataarrays["ColorChannelInfo"].append(ChannelControl.deserialize("0001FFFF"))
+        dataarrays["TexCoordInfo"].append(TexCoordInfo.deserialize("01043CFF"))
+
 
         offsets["MaterialIndexRemapTable"] = f.tell()-start
         for i, material in enumerate(self.materials):
@@ -524,12 +537,16 @@ class MAT1(object):
 
         for datatype in sections[4:]:
             offsets[datatype] = f.tell()-start
+            if len(dataarrays[datatype]) == 0:
+                offsets[datatype] = 0
+                continue
+            #print("offset", offsets[datatype])
             if datatype in ("UcArray2_ColorChannelCount", "UcArray3_TexGenCount", "UCArray6_Tevstagenums", "UcArray7_Dither"):
                 for data in dataarrays[datatype]:
                     write_uint8(f, data)
             elif datatype in ("UsArray4_TextureIndices", ):
                 for data in dataarrays[datatype]:
-                    print(data,type(data))
+                    print(data, type(data))
                     write_uint16(f, data)
             else:
                 for data in dataarrays[datatype]:
@@ -537,7 +554,7 @@ class MAT1(object):
                     data.write(f)
 
             write_pad(f, 4)
-
+        write_pad(f, 0x20)
         total = f.tell()
 
         f.seek(offsets_start)

@@ -119,6 +119,10 @@ class UnknownData(object):
 
 class ChannelControl(UnknownData):
     size = 4
+
+
+class AlphaChannelControl(UnknownData):
+    size = 4
     # Potentially: Only one byte is used by J2D?
     #@classmethod
     #def from_array(cls, f, start, i):
