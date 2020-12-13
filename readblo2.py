@@ -476,7 +476,7 @@ class Textbox(Pane):
 
         textbox.size = read_uint16(f)
         textbox.unk1 = read_uint16(f)
-        textbox.unk2 = read_uint16(f)
+        textbox.material = read_uint16(f)
         textbox.signedunk3 = read_int16(f)
         textbox.signedunk4 = read_int16(f)
         textbox.unk5 = read_uint16(f)
@@ -488,7 +488,7 @@ class Textbox(Pane):
         textbox.unk11 = read_uint8(f)
         res = f.read(3)
         assert res == b"RES"
-        textbox.unk12 = read_uint16(f)
+        textbox.text_cutoff = read_uint16(f)
         stringlength = read_uint16(f)
         assert f.tell() == start+0x70
         textbox.text = f.read(stringlength).decode("shift_jis_2004")
@@ -503,7 +503,7 @@ class Textbox(Pane):
 
         write_uint16(f, self.size)
         write_uint16(f, self.unk1)
-        write_uint16(f, self.unk2)
+        write_uint16(f, self.material)
         write_int16(f, self.signedunk3)
         write_int16(f, self.signedunk4)
         write_uint16(f, self.unk5)
@@ -514,7 +514,7 @@ class Textbox(Pane):
         write_uint32(f, self.unk10)
         write_uint8(f, self.unk11)
         f.write(b"RES")
-        write_uint16(f, self.unk12)
+        write_uint16(f, self.text_cutoff)
 
         text = bytes(self.text, encoding="shift_jis_2004")
         write_uint16(f, len(text))
@@ -540,7 +540,7 @@ class Textbox(Pane):
 
         window.assign_value(obj, "size")
         window.assign_value(obj, "unk1")
-        window.assign_value(obj, "unk2")
+        window.assign_value(obj, "material")
         window.assign_value(obj, "signedunk3")
         window.assign_value(obj, "signedunk4")
         window.assign_value(obj, "unk5")
@@ -550,7 +550,7 @@ class Textbox(Pane):
         window.assign_value(obj, "unk9")
         window.assign_value(obj, "unk10")
         window.assign_value(obj, "unk11")
-        window.assign_value(obj, "unk12")
+        window.assign_value(obj, "text_cutoff")
 
         window.assign_value(obj, "text")
 
