@@ -265,6 +265,7 @@ class Pane(object):
         return pane
 
 
+# Draw a window: 4 corner elements + side and one filling material
 class Window(Pane):
     def __init__(self):
         super().__init__()
@@ -368,6 +369,7 @@ class Window(Pane):
         return window
 
 
+# Draw a texture in the GUI
 class Picture(Pane):
     def __init__(self):
         super().__init__()
@@ -460,6 +462,7 @@ class Picture(Pane):
         return window
 
 
+# Create text. Requires a material with font and an initialized font.
 class Textbox(Pane):
     def __init__(self):
         super().__init__()
