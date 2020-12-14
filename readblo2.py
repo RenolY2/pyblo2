@@ -290,7 +290,7 @@ class Window(Pane):
         #assert window.padding == "\xFF"*8
         window.subdata = [{}, {}, {}, {}]
         for i in range(4):
-            window.subdata[i]["sub_unk1"] = read_uint16(f)
+            window.subdata[i]["material"] = read_int16(f)
         window.unkbyte1 = read_uint8(f)
         window.unkbyte2 = read_uint8(f)
         window.unk3 = read_uint16(f)
@@ -298,7 +298,7 @@ class Window(Pane):
         window.unk5 = read_uint16(f)
         window.unk6 = read_uint16(f)
         window.unk7 = read_uint16(f)
-        window.unk8 = read_uint16(f)
+        window.material = read_int16(f)
         
         re = f.read(2)
         assert re == b"RE"
@@ -321,7 +321,7 @@ class Window(Pane):
         f.write(unhexlify(self.padding))
         assert len(unhexlify(self.padding)) == 8
         for i in range(4):
-            write_uint16(f, self.subdata[i]["sub_unk1"])
+            write_int16(f, self.subdata[i]["material"])
 
         write_uint8(f, self.unkbyte1)
         write_uint8(f, self.unkbyte2)
@@ -330,7 +330,7 @@ class Window(Pane):
         write_uint16(f, self.unk5)
         write_uint16(f, self.unk6)
         write_uint16(f, self.unk7)
-        write_uint16(f, self.unk8)
+        write_int16(f, self.material)
 
         f.write(b"RE")
 
@@ -363,7 +363,7 @@ class Window(Pane):
         window.assign_value(obj, "unk5")
         window.assign_value(obj, "unk6")
         window.assign_value(obj, "unk7")
-        window.assign_value(obj, "unk8")
+        window.assign_value(obj, "material")
 
         return window
 
