@@ -795,7 +795,7 @@ if __name__ == "__main__":
 
     if inputfile.endswith(".blo"):
         if outfile is None:
-            outfile = inputfile+".json"
+            outfile = inputfile[:-4]+".json"
         with open(inputfile, "rb") as f:
             blo = ScreenBlo.from_file(f)
 
@@ -804,7 +804,7 @@ if __name__ == "__main__":
 
     elif inputfile.endswith(".json"):
         if outfile is None:
-            outfile = inputfile+".blo"
+            outfile = inputfile[:-5]+".blo"
         with open(inputfile, "r", encoding="utf-8") as f:
             blo = ScreenBlo.deserialize(json.load(f))
 
