@@ -178,9 +178,14 @@ class Pane(object):
         pane.p_enabled = read_uint8(f) # 0xC
         pane.p_anchor = read_uint8(f) # 0xD
         
+        
+        #pane.p_reserved = read_uint16(f)
+        #if re != b"RE":
+        #    print(hex(f.tell()-2))
         re = f.read(2)
-        assert re == b"RE"
-        pane.p_panename = f.read(0x8+0x8).decode("ascii")
+        assert re == b"RE" or re == b"\x00\x00"
+        pane.p_panename = f.read(0x8).decode("ascii")
+        pane.p_secondaryname = f.read(0x8).decode("ascii")
         #unknown = f.read(0x8)
         #assert unknown == b"\x00"*8
         pane.p_size_x = read_float(f)
@@ -212,6 +217,7 @@ class Pane(object):
         write_uint8(f, self.p_anchor)
         f.write(b"RE")
         f.write(bytes(self.p_panename, encoding="ascii"))
+        f.write(bytes(self.p_secondaryname, encoding="ascii"))
 
         write_float(f, self.p_size_x)
         write_float(f, self.p_size_y)
@@ -253,6 +259,7 @@ class Pane(object):
         pane.assign_value(obj, "p_enabled")
         pane.assign_value(obj, "p_anchor")
         pane.assign_value(obj, "p_panename")
+        pane.assign_value(obj, "p_secondaryname")
         pane.assign_value(obj, "p_size_x")
         pane.assign_value(obj, "p_size_y")
         pane.assign_value(obj, "p_scale_x")
@@ -286,7 +293,7 @@ class Window(Pane):
 
         window.size = read_uint16(f)
         reserved = f.read(6)
-        assert reserved == b"RESERV"
+        assert reserved == b"RESERV" 
         window.padding = str(hexlify(f.read(8)), encoding="ascii")#.decode("ascii", errors="backslashreplace")
         #assert window.padding == "\xFF"*8
         window.subdata = [{}, {}, {}, {}]
@@ -390,7 +397,7 @@ class Picture(Pane):
         picture.material = read_uint16(f)
         
         re = f.read(2)
-        assert re == b"RE"
+        assert re == b"RE" or re == b"\x00\x00"
         color1 = {}
         color2 = {}
         
@@ -491,7 +498,9 @@ class Textbox(Pane):
         textbox.color_bottom = Color.from_file(f)
         textbox.unk11 = read_uint8(f)
         res = f.read(3)
-        assert res == b"RES"
+        if res != b"RES":
+            print(hex(f.tell()-3))
+        assert res == b"RES" or res == b"\x00\x00\x00"
         textbox.text_cutoff = read_uint16(f)
         stringlength = read_uint16(f)
         assert f.tell() == start+0x70
@@ -597,8 +606,10 @@ class ResourceReference(Item):
             offset = read_uint16(f)
             
             f.seek(restart + offset)
+            t = f.tell()
             unk = read_uint8(f)
             length = read_uint8(f)
+            print(hex(t), hex(unk), hex(length))
             assert unk == 0x2 
             name = str(f.read(length), "shift_jis_2004")
             
