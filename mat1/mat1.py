@@ -1,7 +1,9 @@
 import struct
+from binascii import hexlify
+
 from binary_io import *
-from mat1.enums import *
-from mat1.datatypes import *
+from .enums import *
+from .datatypes import *
 
 
 class StringTable(object):
@@ -139,6 +141,31 @@ def write_index_array(f, array, offset, size, count):
         write_at(f, array[i], offset + i * size)
 
 
+class DebugFileInfo(object):
+    def __init__(self, outpath):
+        self.path = outpath
+        with open(outpath, "w") as f:
+            f.write("")
+        self.lines = []
+    
+    def add_line(self, data):
+        self.lines.append(data)
+    
+    def add_offset(self, name, offset, *args):
+        more = ""
+        for v in args:
+            more += str(v)+" "
+        self.lines.append("{}: 0x{:x}".format(name, offset)+" "+more)
+    
+    def write(self):
+        with open(self.path, "a") as f:
+            for line in self.lines:
+                f.write(line)
+                f.write("\n")
+
+debug = DebugFileInfo("debug.txt")
+print(debug)
+
 class MaterialInitData(object):
     def __init__(self):
         self.name = ""
@@ -146,13 +173,12 @@ class MaterialInitData(object):
     @classmethod
     def from_array(cls, f, start, i, offsets, real_i):
         initdata = cls()
-
-
-
         #start = f.tell()
         
         f.seek(start + i * 0xE8) # 0xE8 is size of Material Init Data entry
         initdatastart = f.tell()
+        debug.add_offset("MaterialInitData {0}".format(i), initdatastart)
+        
         #f.seek(start)
         if offsets["IndirectInitData"] != 0:
             initdata.indirectdata = IndirectInitData.from_array(f, offsets["IndirectInitData"], real_i)
@@ -166,16 +192,18 @@ class MaterialInitData(object):
         initdata.cullmode = CullModeSetting.from_array(f, offsets["GXCullMode"], cullmodeIndex)
 
         colorChannelNumIndex = read_int8_at(f, initdatastart + 0x2)
-        initdata.color_channel_count = read_int8_at(f, offsets["UcArray2_ColorChannelCount"]+colorChannelNumIndex)
+        initdata.color_channel_count = read_uint8_at(f, offsets["UcArray2_ColorChannelCount"]+colorChannelNumIndex)
 
         texGenNumIndex = read_int8_at(f, initdatastart + 0x3)
-        initdata.tex_gen_count = read_int8_at(f, offsets["TexCoordInfo"]+texGenNumIndex)
-
+        initdata.tex_gen_count = read_uint8_at(f, offsets["UcArray3_TexGenCount"]+texGenNumIndex)
+        debug.add_line("TexGenCount: 0x{0:x}".format(initdata.tex_gen_count))
         tevStageNumIndex = read_int8_at(f, initdatastart + 0x4)
-        initdata.tev_stage_count = read_int8_at(f, offsets["UCArray6_Tevstagenums"] + tevStageNumIndex)
+        initdata.tev_stage_count = read_uint8_at(f, offsets["UCArray6_Tevstagenums"] + tevStageNumIndex)
 
         ditherIndex = read_int8_at(f, initdatastart + 0x5)
-        initdata.dither = read_int8_at(f, offsets["UcArray7_Dither"] + ditherIndex)
+        
+        initdata.dither = read_uint8_at(f, offsets["UcArray7_Dither"] + ditherIndex)
+        #debug.add_offset("ditherIndex", initdatastart + 0x5, ditherIndex, initdata.dither)
         unk = read_int8_at(f, initdatastart + 0x6)
         initdata.unk = unk
         
@@ -194,6 +222,7 @@ class MaterialInitData(object):
         
         # 4 ColorChans starting at 0xC (2 byte index) 
         colorChanIndices = read_index_array(f, initdatastart + 0xC, 2, 4)
+        debug.add_offset("ColorChannelInfo", initdatastart + 0xC, *colorChanIndices)
         initdata.color_channels = []
         for i in range(4):
             index = colorChanIndices[i]
@@ -215,7 +244,7 @@ class MaterialInitData(object):
             if index == -1:
                 initdata.tex_coord_generators.append(None)
             else:
-                texcoord = TexCoordInfo.from_array(f, offsets["TexCoordInfo"], index)
+                texcoord = TexCoordInfo.from_array(f, offsets["TexCoordInfo"], index, True)
                 initdata.tex_coord_generators.append(texcoord)
 
         # 8 tex matrices starting at 0x24 (2 byte index) 
@@ -278,7 +307,7 @@ class MaterialInitData(object):
         tevstageSwapModes = read_index_array(f, initdatastart + 0xBA, 2, 16)
         initdata.tevstage_swapmodes = []
         for index in tevstageSwapModes:
-            swapmode = None if index == -1 else TevSwapMode.from_array(f, offsets["TevSwapModeInfo"], index)
+            swapmode = None if index == -1 else TevSwapMode.from_array(f, offsets["TevSwapModeInfo"], index, True)
             initdata.tevstage_swapmodes.append(swapmode)
 
 
@@ -314,12 +343,21 @@ class MaterialInitData(object):
         for color in self.matcolors:  # 0x8
             write_int16(f, get_index_or_add(dataarrays["MaterialColor"], color))
 
-        for color_channel in self.color_channels:  # 0xC
-            print("adding value", color_channel)
-            print(dataarrays["ColorChannelInfo"])
-            write_int16(f, get_index_or_add(dataarrays["ColorChannelInfo"], color_channel))
+        """for color_channel in self.color_channels:  # 0xC
+            #print("adding value", color_channel)
+            #print(dataarrays["ColorChannelInfo"])
+            write_int16(f, get_index_or_add(dataarrays["ColorChannelInfo"], color_channel))"""
+        # Hardcoding color channel info indices
+        write_int16(f, 0)
+        write_int16(f, 0)
+        write_int16(f, 1)
+        write_int16(f, 1)
+        
         assert f.tell() - start == 0x14
         for texcoord in self.tex_coord_generators:  # 0x14
+            #if texcoord is not None:
+            #    print(len(dataarrays["TexCoordInfo"]))
+            #    print(texcoord, hexlify(texcoord.data), texcoord not in dataarrays["TexCoordInfo"])
             write_int16(f, get_index_or_add(dataarrays["TexCoordInfo"], texcoord))
         assert f.tell() - start == 0x24
 
@@ -361,7 +399,7 @@ class MaterialInitData(object):
         write_int16(f, get_index_or_add(dataarrays["AlphaCompInfo"], self.alphacomp))
         write_int16(f, get_index_or_add(dataarrays["BlendInfo"], self.blend))
         f.write(b"\x00\x00")  # padding
-        print(hex(f.tell() - start))
+        #print(hex(f.tell() - start))
         assert f.tell() - start == 0xE8
 
     def serialize(self):
@@ -430,7 +468,14 @@ class MAT1(object):
         self.name = "MAT1"
         #self.material_names = StringTable()
         self.materials = []
-        
+
+    def get_mat_index(self, name):
+        for i, v in enumerate(self.materials):
+            if v.name == name:
+                return i
+
+        return None
+
     @classmethod
     def from_file(cls, f):
         start = f.tell()
@@ -455,6 +500,7 @@ class MAT1(object):
                         "TevSwapModeInfo", "TevSwapModeTableInfo", "AlphaCompInfo", "BlendInfo", "UcArray7_Dither"):
             
             offsets[datatype] = start + read_uint32(f)
+            debug.add_offset("{0}".format(datatype), offsets[datatype])
         
         if offsets["IndirectInitData"] == start or offsets["IndirectInitData"]-offsets["MaterialNames"] < 5:
             offsets["IndirectInitData"] = 0
@@ -472,6 +518,9 @@ class MAT1(object):
             materialinitdata.name = material_names.strings[i]
             mat1.materials.append(materialinitdata)
         f.seek(start+sectionsize)
+        
+        debug.write()
+        
         return mat1
 
     def write(self, f):
@@ -504,13 +553,41 @@ class MAT1(object):
 
         has_indirectdata = False
         offsets["MaterialInitData"] = f.tell()-start
+        
+        # Prefill the arrays with data
+        #dataarrays["TexCoordInfo"].append(TexCoordInfo.deserialize("01043CFF"))
+        for material in self.materials:
+            for texcoord in material.tex_coord_generators:
+                if (texcoord is not None 
+                  and texcoord.index is not None
+                  and texcoord not in dataarrays["TexCoordInfo"]):
+                    
+                    dataarrays["TexCoordInfo"].append(texcoord)
+            
+            for tevswapmode in material.tevstage_swapmodes:
+                if (tevswapmode is not None 
+                  and tevswapmode.index is not None
+                  and tevswapmode not in dataarrays["TevSwapModeInfo"]):
+                    
+                    dataarrays["TevSwapModeInfo"].append(tevswapmode)
+        
+        dataarrays["TexCoordInfo"].sort(key=lambda x: x.index)
+        dataarrays["TevSwapModeInfo"].sort(key=lambda x: x.index)
+        print(dataarrays["TevSwapModeInfo"])
+        
+        dataarrays["UcArray7_Dither"].append(0)
+        dataarrays["UcArray7_Dither"].append(1)
+        
         for material in self.materials:
             material.write_and_fill_data(f, dataarrays)
             if material.indirectdata is not None:
                 has_indirectdata = True
 
         dataarrays["ColorChannelInfo"].append(ChannelControl.deserialize("0001FFFF"))
-        dataarrays["TexCoordInfo"].append(TexCoordInfo.deserialize("01043CFF"))
+        dataarrays["ColorChannelInfo"].append(ChannelControl.deserialize("0001FFFF"))
+        
+        for i in range(8-len(dataarrays["TevSwapModeInfo"])):
+            dataarrays["TevSwapModeInfo"].append(TevSwapMode.deserialize("0000FFFF"))
 
 
         offsets["MaterialIndexRemapTable"] = f.tell()-start
@@ -546,11 +623,11 @@ class MAT1(object):
                     write_uint8(f, data)
             elif datatype in ("UsArray4_TextureIndices", ):
                 for data in dataarrays[datatype]:
-                    print(data, type(data))
+                    #print(data, type(data))
                     write_uint16(f, data)
             else:
                 for data in dataarrays[datatype]:
-                    print(data)
+                    #print(data)
                     data.write(f)
 
             write_pad(f, 4)

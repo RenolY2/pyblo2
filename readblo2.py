@@ -1,3 +1,4 @@
+from math import radians, sin, cos
 from binary_io import *
 from binascii import hexlify, unhexlify
 from mat1.mat1 import MAT1
@@ -22,18 +23,25 @@ class Node(object):
         node = cls()
         node.materials = materials 
         node.textures = textures
-        
+
+        last = None
+
         next = peek_id(f)
         while next != b"EXT1":
             if next == b"BGN1":
                 f.read(8)
+
                 childnode = Node.from_file(f, node.materials, node.textures)
-                node.children.append(childnode)
+                last.child = childnode
+                for child in childnode.children:
+                    child.parent = last
+
+                #node.children.append(childnode)
+                last = None
             elif next == b"END1" or next == b"EXT1":
                 f.read(8)
                 return node 
             elif next == b"TEX1":
-                
                 node.textures = TextureNames.from_file(f)
                 print("set the tex1", node.textures)
                 node.children.append(node.textures)
@@ -53,13 +61,18 @@ class Node(object):
                 #print(mat1.material_names.strings)
             
             elif next == b"PAN2":
-                node.children.append(Pane.from_file(f))
+                last = Pane.from_file(f)
+                node.children.append(last)
             elif next == b"PIC2":
-                node.children.append(Picture.from_file(f))
+                last = Picture.from_file(f, materials)
+
+                node.children.append(last)
             elif next == b"WIN2":
-                node.children.append(Window.from_file(f))
+                last = Window.from_file(f)
+                node.children.append(last)
             elif next == b"TBX2":
-                node.children.append(Textbox.from_file(f))
+                last = Textbox.from_file(f)
+                node.children.append(last)
             elif not next:
                 raise RuntimeError("malformed file?")
             else:
@@ -72,7 +85,7 @@ class Node(object):
     def write(self, f):
         count = 0
         for child in self.children:
-            if isinstance(child, Node):
+            """if isinstance(child, Node):
                 f.write(b"BGN1")
                 write_uint32(f, 8)
                 count += child.write(f) + 2
@@ -80,7 +93,23 @@ class Node(object):
                 write_uint32(f, 8)
             else:
                 count += 1
+                child.write(f)"""
+
+            count += 1
+            if isinstance(child, Pane):
+                child.write(f, self.materials)
+            else:
                 child.write(f)
+            if hasattr(child, "child") and child.child is not None:
+                f.write(b"BGN1")
+                write_uint32(f, 8)
+                if isinstance(child.child, Pane):
+                    count += child.child.write(f, self.materials) + 2
+                else:
+                    count += child.child.write(f) + 2
+                
+                f.write(b"END1")
+                write_uint32(f, 8)
 
         return count
 
@@ -91,17 +120,28 @@ class Node(object):
                 result.append(child.postprocess_serialize(self.textures))
             else:
                 result.append(child.serialize())
+                if hasattr(child, "child") and child.child is not None:
+                    result.append(child.child.serialize())
         
         return result 
     
     @classmethod 
-    def deserialize(cls, obj, textures=None):
+    def deserialize(cls, obj, materials=None, textures=None):
         node = cls()
         node.textures = textures
+        node.materials = materials
+
+        last = None
 
         for item in obj:
+            add_item = True
             if isinstance(item, list):
-                bloitem = Node.deserialize(item, node.textures)
+                bloitem = Node.deserialize(item, node.materials, node.textures)
+                last.child = bloitem
+                for child in bloitem.children:
+                    child.parent = last
+                last = None
+                add_item = False
             elif item["type"] == "TEX1":
                 bloitem = TextureNames.deserialize(item)
                 node.textures = bloitem
@@ -109,17 +149,23 @@ class Node(object):
                 bloitem = FontNames.deserialize(item)
             elif item["type"] == "PAN2":
                 bloitem = Pane.deserialize(item)
+                last = bloitem
             elif item["type"] == "WIN2":
                 bloitem = Window.deserialize(item)
+                last = bloitem
             elif item["type"] == "TBX2":
                 bloitem = Textbox.deserialize(item)
+                last = bloitem
             elif item["type"] == "PIC2":
                 bloitem = Picture.deserialize(item)
+                last = bloitem
             elif item["type"] == "MAT1":
                 bloitem = MAT1.preprocess_deserialize(item, node.textures)
+                node.materials = bloitem
             else:
                 raise RuntimeError("Unknown item {0}".format(item["type"]))
-            node.children.append(bloitem)
+            if add_item:
+                node.children.append(bloitem)
         
         return node 
     
@@ -159,9 +205,23 @@ class Item(object):
 
 class Pane(object):
     def __init__(self):
+        self.hide = False  # Not a blo feature, hides element in editor only
+
         self.name = "PAN2"
         self.p_name = "PAN2"
-        
+        self.child = None
+        self.parent = None
+        self.p_anchor = None
+        self.p_size_x = None
+        self.p_size_y = None
+        self.p_scale_x = None
+        self.p_scale_y = None
+        self.p_offset_x = None
+        self.p_offset_y = None
+        self.p_rotation = None
+        self.p_panename = None
+        self.p_secondaryname = None
+
     @classmethod
     def from_file(cls, f):
         start = f.tell()
@@ -174,14 +234,10 @@ class Pane(object):
         unk = read_uint16(f)
         assert unk == 0x40
 
-        pane.p_unk1 = read_uint16(f) # 0xA
-        pane.p_enabled = read_uint8(f) # 0xC
-        pane.p_anchor = read_uint8(f) # 0xD
+        pane.p_unk1 = read_uint16(f)  # 0xA
+        pane.p_enabled = read_uint8(f)  # 0xC
+        pane.p_anchor = read_uint8(f)  # 0xD
         
-        
-        #pane.p_reserved = read_uint16(f)
-        #if re != b"RE":
-        #    print(hex(f.tell()-2))
         re = f.read(2)
         assert re == b"RE" or re == b"\x00\x00"
         pane.p_panename = f.read(0x8).decode("ascii")
@@ -205,12 +261,11 @@ class Pane(object):
         assert f.tell() == start + 0x48
         return pane
 
-    def write(self, f):
+    def write(self, f, mat1):
         start = f.tell()
         write_name(f, self.p_name)
         write_uint32(f, 0x48)
         write_uint16(f, 0x40)
-
 
         write_uint16(f, self.p_unk1)
         write_uint8(f, self.p_enabled)
@@ -240,11 +295,10 @@ class Pane(object):
         result["p_type"] = self.p_name
 
         for key, val in self.__dict__.items():
-            if key != "name" and key != "p_name":
+            if key != "name" and key != "p_name" and key != "child" and key != "parent" and key != "widget" and key != "hide":
                 if isinstance(val, bytes):
                     raise RuntimeError("hhhe")
-                result[key] = val 
-                
+                result[key] = val
         return result
 
     def assign_value(self, src, field):
@@ -271,6 +325,95 @@ class Pane(object):
 
         return pane
 
+    def get_anchor_offset(self):
+        w, h = self.p_size_x, self.p_size_y
+        offset_x = 0.0
+        offset_y = 0.0
+        if self.p_anchor == 1:  # Center-Top anchor
+            offset_x = -w / 2
+        elif self.p_anchor == 2:  # Top-Right anchor
+            offset_x = -w
+        elif self.p_anchor == 3:  # Center-Left anchor
+            offset_y = -h / 2
+        elif self.p_anchor == 4:  # Center anchor
+            offset_x = -w / 2
+            offset_y = -h / 2
+        elif self.p_anchor == 5:  # Center-right anchor
+            offset_x = -w
+            offset_y = -h / 2
+        elif self.p_anchor == 6:  # Bottom-left anchor
+            offset_y = -h
+        elif self.p_anchor == 7:  # Center-Bottom anchor
+            offset_x = -w / 2
+            offset_y = -h
+        elif self.p_anchor == 8:  # Bottom-right anchor
+            offset_x = -w
+            offset_y = -h
+
+        return offset_x, offset_y
+
+    def _get_middle_panespace(self):
+        if self.p_anchor == 1:
+            middle_x = 0
+            middle_y = +self.p_size_y/2.0
+        elif self.p_anchor == 2:
+            middle_x = -self.p_size_x / 2.0
+            middle_y = +self.p_size_y / 2.0
+        elif self.p_anchor == 3:
+            middle_x = +self.p_size_x / 2.0
+            middle_y = 0
+        elif self.p_anchor == 4:
+            middle_x = 0
+            middle_y = 0
+        elif self.p_anchor == 5:
+            middle_x = 0-self.p_size_x / 2.0
+            middle_y = 0
+        elif self.p_anchor == 6:
+            middle_x = +self.p_size_x / 2.0
+            middle_y = -self.p_size_y / 2.0
+        elif self.p_anchor == 7:
+            middle_x = 0
+            middle_y = -self.p_size_y / 2.0
+        elif self.p_anchor == 8:
+            middle_x = -self.p_size_x / 2.0
+            middle_y = -self.p_size_y / 2.0
+        else:
+            middle_x = +self.p_size_x / 2.0
+            middle_y = +self.p_size_y / 2.0
+
+        return middle_x, middle_y
+
+    def _get_middle(self):
+        middle_x, middle_y = self._get_middle_panespace()
+        alpha = radians(-self.p_rotation)
+        new_middle_x = middle_x*cos(alpha) - middle_y*sin(alpha)
+        new_middle_y = middle_x*sin(alpha) + middle_y*cos(alpha)
+
+        return new_middle_x+self.p_offset_x, new_middle_y+self.p_offset_y
+
+    def _set_middle(self, middle_x, middle_y):
+        offsetx, offsety = self._get_middle_panespace()
+        alpha = radians(-self.p_rotation)
+        new_offset_x = offsetx * cos(alpha) - offsety * sin(alpha)
+        new_offset_y = offsetx * sin(alpha) + offsety * cos(alpha)
+        self.p_offset_x = middle_x - new_offset_x
+        self.p_offset_y = middle_y - new_offset_y
+
+    def resize(self, diff_x, diff_y, diff_x_box, diff_y_box):
+        middle_x, middle_y = self._get_middle()
+
+        middle_x = middle_x + diff_x/2.0
+        middle_y = middle_y + diff_y/2.0
+
+        #self.p_offset_x += diff_x#/2.0
+        #self.p_offset_y += diff_y#/2.0
+        # side_x = 1 for "right resize", side_x = -1 for "left resize"
+        # side_y = 1 for "up resize", side_y = -1 for "bottom resize" (in coordinate system where +y is up and -y is down)
+        self.p_size_x += diff_x_box
+        self.p_size_y += diff_y_box
+
+        self._set_middle(middle_x, middle_y)
+
 
 # Draw a window: 4 corner elements + side and one filling material
 class Window(Pane):
@@ -293,7 +436,7 @@ class Window(Pane):
 
         window.size = read_uint16(f)
         reserved = f.read(6)
-        assert reserved == b"RESERV" 
+        assert reserved == b"RESERV" or reserved == b"\x00"*7
         window.padding = str(hexlify(f.read(8)), encoding="ascii")#.decode("ascii", errors="backslashreplace")
         #assert window.padding == "\xFF"*8
         window.subdata = [{}, {}, {}, {}]
@@ -309,7 +452,7 @@ class Window(Pane):
         window.material = read_int16(f)
         
         re = f.read(2)
-        assert re == b"RE"
+        assert re == b"RE" or re == b"\x00\x00"
         
         for i in range(4):
             window.subdata[i]["sub_unk2"] = read_uint16(f)
@@ -318,11 +461,11 @@ class Window(Pane):
         assert f.tell() == start+0x90
         return window 
 
-    def write(self, f):
+    def write(self, f, mat1):
         start = f.tell()
         write_name(f, self.name)
         write_uint32(f, 0x90)
-        super().write(f) # Write pane
+        super().write(f, mat1) # Write pane
         write_uint16(f, self.size)
 
         f.write(b"RESERV")
@@ -383,7 +526,7 @@ class Picture(Pane):
         self.name = "PIC2"
     
     @classmethod
-    def from_file(cls, f):
+    def from_file(cls, f, mat1):
         start = f.tell()
         name = read_name(f)
         size = read_uint32(f)
@@ -394,7 +537,8 @@ class Picture(Pane):
 
         picture.size = read_uint16(f)
         picture.unk_index = read_uint16(f)
-        picture.material = read_uint16(f)
+        mat_index = read_uint16(f)
+        picture.material = mat1.materials[mat_index].name
         
         re = f.read(2)
         assert re == b"RE" or re == b"\x00\x00"
@@ -419,14 +563,14 @@ class Picture(Pane):
         assert f.tell() == start+0x80
         return picture 
 
-    def write(self, f):
+    def write(self, f, mat1):
         start = f.tell()
         write_name(f, self.name)
         write_uint32(f, 0x80)
-        super().write(f)  # Write pane
+        super().write(f, mat1)  # Write pane
         write_uint16(f, self.size)
         write_uint16(f, self.unk_index)
-        write_uint16(f, self.material)
+        write_uint16(f, mat1.get_mat_index(self.material))
         f.write(b"RE")
         write_uint16(f, self.color1["unk1"])
         write_uint16(f, self.color1["unk2"])
@@ -498,8 +642,6 @@ class Textbox(Pane):
         textbox.color_bottom = Color.from_file(f)
         textbox.unk11 = read_uint8(f)
         res = f.read(3)
-        if res != b"RES":
-            print(hex(f.tell()-3))
         assert res == b"RES" or res == b"\x00\x00\x00"
         textbox.text_cutoff = read_uint16(f)
         stringlength = read_uint16(f)
@@ -508,11 +650,11 @@ class Textbox(Pane):
         f.seek(start+size)
         return textbox
 
-    def write(self, f):
+    def write(self, f, mat1):
         start = f.tell()
         write_name(f, self.name)
         write_uint32(f, 0x70)
-        super().write(f)
+        super().write(f, mat1)
 
         write_uint16(f, self.size)
         write_uint16(f, self.unk1)
@@ -534,7 +676,7 @@ class Textbox(Pane):
         assert f.tell() == start + 0x70
         f.write(text)
         #f.write(b"\x00")
-        write_pad(f, 4)
+        write_pad(f, 8)
         curr = f.tell()
         f.seek(start+4)
         write_uint32(f, curr-start)
@@ -606,10 +748,8 @@ class ResourceReference(Item):
             offset = read_uint16(f)
             
             f.seek(restart + offset)
-            t = f.tell()
             unk = read_uint8(f)
             length = read_uint8(f)
-            print(hex(t), hex(unk), hex(length))
             assert unk == 0x2 
             name = str(f.read(length), "shift_jis_2004")
             
@@ -795,7 +935,22 @@ class ScreenBlo(object):
         return blo
 
 
-if __name__ == "__main__":  
+if __name__ == "__main__":
+    """
+    pane = Pane()
+    pane.p_offset_x = 0
+    pane.p_offset_y = 0
+    pane.p_size_x = 150
+    pane.p_size_y = 100
+
+    for i in range(9):
+        pane.p_anchor = 1
+        x, y = pane._get_middle()
+        pane._set_middle(x, y)
+
+        print(pane.p_offset_x, pane.p_offset_y)
+
+    """
     import json 
     import sys
     inputfile = sys.argv[1]
@@ -806,7 +961,7 @@ if __name__ == "__main__":
 
     if inputfile.endswith(".blo"):
         if outfile is None:
-            outfile = inputfile[:-4]+".json"
+            outfile = inputfile+".json"
         with open(inputfile, "rb") as f:
             blo = ScreenBlo.from_file(f)
 
@@ -815,7 +970,7 @@ if __name__ == "__main__":
 
     elif inputfile.endswith(".json"):
         if outfile is None:
-            outfile = inputfile[:-5]+".blo"
+            outfile = inputfile+".blo"
         with open(inputfile, "r", encoding="utf-8") as f:
             blo = ScreenBlo.deserialize(json.load(f))
 
