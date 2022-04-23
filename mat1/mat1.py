@@ -144,8 +144,8 @@ def write_index_array(f, array, offset, size, count):
 class DebugFileInfo(object):
     def __init__(self, outpath):
         self.path = outpath
-        with open(outpath, "w") as f:
-            f.write("")
+        #with open(outpath, "w") as f:
+        #    f.write("")
         self.lines = []
     
     def add_line(self, data):
@@ -158,13 +158,15 @@ class DebugFileInfo(object):
         self.lines.append("{}: 0x{:x}".format(name, offset)+" "+more)
     
     def write(self):
-        with open(self.path, "a") as f:
-            for line in self.lines:
-                f.write(line)
-                f.write("\n")
+        #with open(self.path, "a") as f:
+        #    for line in self.lines:
+        #        f.write(line)
+        #        f.write("\n")
+        pass
+
 
 debug = DebugFileInfo("debug.txt")
-print(debug)
+
 
 class MaterialInitData(object):
     def __init__(self):
@@ -343,15 +345,15 @@ class MaterialInitData(object):
         for color in self.matcolors:  # 0x8
             write_int16(f, get_index_or_add(dataarrays["MaterialColor"], color))
 
-        """for color_channel in self.color_channels:  # 0xC
+        for color_channel in self.color_channels:  # 0xC
             #print("adding value", color_channel)
             #print(dataarrays["ColorChannelInfo"])
-            write_int16(f, get_index_or_add(dataarrays["ColorChannelInfo"], color_channel))"""
+            write_int16(f, get_index_or_add(dataarrays["ColorChannelInfo"], color_channel))
         # Hardcoding color channel info indices
-        write_int16(f, 0)
-        write_int16(f, 0)
-        write_int16(f, 1)
-        write_int16(f, 1)
+        #write_int16(f, 0)
+        #write_int16(f, 0)
+        #write_int16(f, 1)
+        #write_int16(f, 1)
         
         assert f.tell() - start == 0x14
         for texcoord in self.tex_coord_generators:  # 0x14
